@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="sw">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Ramani ya Satelaiti — Geologist</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<style>
+  html,body{margin:0;height:100%;background:#0b0b0b;font-family:system-ui,Roboto,sans-serif}
+  #map{height:100vh;width:100vw}
+  .legend{position:absolute;bottom:10px;right:10px;background:rgba(255,255,255,.94);border-radius:6px;
+          padding:7px 9px;font-size:12px;z-index:1000;box-shadow:0 1px 4px rgba(0,0,0,.4)}
+  .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:middle}
+  .err{position:absolute;top:0;left:0;right:0;background:#B3261E;color:#fff;padding:8px;font-size:13px;z-index:2000;text-align:center}
+  .leaflet-popup-content{font-size:13px}
+  /* Vitufe vikubwa vya kuzoom (+/-) kwa kugusa kwa kidole */
+  .leaflet-control-zoom a{width:46px !important;height:46px !important;line-height:46px !important;
+      font-size:26px !important;font-weight:700;color:#2d4a2b}
+  .leaflet-control-zoom{margin:12px !important;box-shadow:0 2px 6px rgba(0,0,0,.5)}
+  .ptlabel{background:#B3261E;color:#fff;border:none;font-weight:700;font-size:11px;padding:1px 5px;border-radius:8px}
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div class="legend">
+  <div style="font-weight:700;color:#2d4a2b">Prospectivity (Sentinel-2)</div>
+  <div><span class="dot" style="background:#B3261E"></span>&ge;90% (juu sana)</div>
+  <div><span class="dot" style="background:#E4761B"></span>85&ndash;90%</div>
+  <div><span class="dot" style="background:#3d6b39"></span>&lt;85%</div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js"></script>
+<script>
+const CENTERS = {manyara:[-3.6,37.0], tanga:[-5.45,37.95], dodoma:[-6.15,35.8]};
+function qp(k,d){const u=new URLSearchParams(location.search);return u.get(k)||d;}
+const region = qp('region','dodoma');
+const fLat = parseFloat(qp('lat','')), fLon = parseFloat(qp('lon',''));
+const polyParam = qp('poly','');   // "lat,lon;lat,lon;..." -> pima eneo
+function color(s){return s>=0.9?'#B3261E':s>=0.85?'#E4761B':'#3d6b39';}
+
+// Eneo la poligoni (m²) + perimeter — makadirio ya ellipsoid (WGS84), sahihi <0.001%
+function areaPerim(pts){
+  const a=6378137.0, f=1/298.257223563, e2=2*f-f*f, rad=d=>d*Math.PI/180;
+  const n=pts.length;
+  const lat0=pts.reduce((s,p)=>s+p[0],0)/n, lon0=pts.reduce((s,p)=>s+p[1],0)/n;
+  const s=Math.sin(rad(lat0)), w=1-e2*s*s;
+  const M=a*(1-e2)/Math.pow(w,1.5), N=a/Math.sqrt(w);
+  const xy=pts.map(([la,lo])=>[N*Math.cos(rad(lat0))*rad(lo-lon0), M*rad(la-lat0)]);
+  let area=0, perim=0;
+  for(let i=0;i<n;i++){const [x1,y1]=xy[i],[x2,y2]=xy[(i+1)%n];
+    area+=x1*y2-x2*y1; perim+=Math.hypot(x2-x1,y2-y1);}
+  return {area:Math.abs(area/2), perim};
+}
+
+// Basemaps: satelaiti HALISI (Esri World Imagery) + maandishi
+const esriSat = L.tileLayer(
+  'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+  {maxZoom:20,maxNativeZoom:18, attribution:'© Esri, Maxar'});
+const esriLbl = L.tileLayer(
+  'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+  {maxZoom:20,maxNativeZoom:18});
+const map = L.map('map',{center:CENTERS[region]||CENTERS.dodoma, zoom:11, layers:[esriSat, esriLbl]});
+L.control.scale({imperial:false}).addTo(map);
+
+function showErr(t){const d=document.createElement('div');d.className='err';d.textContent=t;document.body.appendChild(d);}
+
+async function loadTargets(){
+  let fc;
+  // 1) Njia ya uhakika: daraja la Android linalosoma assets moja kwa moja (offline)
+  if(window.Android && window.Android.getTargets){
+    try{ fc = JSON.parse(window.Android.getTargets(region)); }catch(e){}
+  }
+  // 2) Fallback: fetch ya file:// (browser/dashboard)
+  if(!fc){
+    try{
+      const r = await fetch('file:///android_asset/targets_seed/'+region+'.geojson');
+      fc = await r.json();
+    }catch(e){ showErr('Imeshindwa kusoma data ya '+region); return; }
+  }
+  const heatPts=[];
+  (fc.features||[]).forEach(f=>{
+    const [lon,lat]=f.geometry.coordinates; const p=f.properties||{};
+    const sc = +(p.score||0);
+    heatPts.push([lat,lon,Math.max(0,(sc-0.7)/0.3)]);
+    L.circleMarker([lat,lon],{radius:5,color:'#fff',fillColor:color(sc),fillOpacity:.9,weight:1})
+      .addTo(map)
+      .bindPopup('<b>Shabaha #'+(p.rank||'')+' — '+region+'</b><br>alama '+(sc*100).toFixed(0)+'%<br>'+
+                 lat.toFixed(5)+', '+lon.toFixed(5));
+  });
+  L.heatLayer(heatPts,{radius:20,blur:16,gradient:{0.3:'#3d6b39',0.6:'#E4761B',0.85:'#B3261E'}}).addTo(map);
+  // Focus kama target imechaguliwa
+  if(!isNaN(fLat) && !isNaN(fLon)){ map.setView([fLat,fLon],16);
+    L.marker([fLat,fLon]).addTo(map).bindPopup('Shabaha uliyochagua').openPopup();
+  }
+}
+
+// ---- Modi ya PIMA ENEO: chora poligoni kutoka point + onyesha eneo ----
+function fmtArea(m2){
+  const ha=m2/10000, ac=m2/4046.8564224;
+  return (ha>=1? ha.toFixed(4)+' ha' : m2.toFixed(0)+' m²')+
+         ' &nbsp;('+m2.toLocaleString(undefined,{maximumFractionDigits:0})+' m² · '+ac.toFixed(3)+' acres)';
+}
+function drawPolygon(){
+  const pts = polyParam.split(';').map(s=>s.split(',').map(Number)).filter(a=>a.length===2 && !isNaN(a[0]) && !isNaN(a[1]));
+  if(pts.length<3){ showErr('Point pungufu (angalau 3 zinahitajika)'); return; }
+  const poly = L.polygon(pts, {color:'#ffd400', weight:2, fillColor:'#ffd400', fillOpacity:.18}).addTo(map);
+  pts.forEach((p,i)=>{
+    L.marker(p).addTo(map).bindTooltip('P'+(i+1), {permanent:true, direction:'top', className:'ptlabel'});
+    L.circleMarker(p,{radius:4,color:'#fff',fillColor:'#B3261E',fillOpacity:1,weight:1}).addTo(map);
+  });
+  const r = areaPerim(pts);
+  L.control.scale({imperial:false}).addTo(map);
+  const box = L.control({position:'topright'});
+  box.onAdd=function(){const d=L.DomUtil.create('div');
+    d.style.cssText='background:rgba(45,74,43,.94);color:#fff;padding:10px 12px;border-radius:8px;font-size:13px;box-shadow:0 2px 6px rgba(0,0,0,.5);max-width:230px';
+    d.innerHTML='<div style="font-weight:700;font-size:14px;margin-bottom:4px">📐 Eneo lililopimwa</div>'+
+      '<div style="font-size:18px;font-weight:700;color:#ffd400">'+(r.area/10000).toFixed(4)+' ha</div>'+
+      '<div>'+r.area.toLocaleString(undefined,{maximumFractionDigits:0})+' m² · '+(r.area/4046.8564224).toFixed(3)+' acres</div>'+
+      '<div style="margin-top:4px">Mzunguko: '+(r.perim/1000).toFixed(4)+' km ('+r.perim.toFixed(0)+' m)</div>'+
+      '<div style="margin-top:4px;color:#bcd">Point: '+pts.length+'</div>';
+    return d;};
+  box.addTo(map);
+  map.fitBounds(poly.getBounds(), {padding:[40,40]});
+}
+
+if(polyParam){ drawPolygon(); } else { loadTargets(); }
+</script>
+</body>
+</html>
