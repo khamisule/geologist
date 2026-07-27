@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Geologist — Mfumo wa Madini Tanzania</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%232d4a2b'/%3E%3Cpolygon points='50,18 82,44 50,86 18,44' fill='%23ffd400'/%3E%3Cpolygon points='32,31 68,31 82,44 18,44' fill='%23ffe678'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <style>
   :root{--accent:#3d6b39;--dark:#2d4a2b;--hi:#B3261E;--md:#E4761B;--gold:#ffd400;--muted:#6b7280}
@@ -40,6 +41,15 @@
   #coordbox .b{display:flex;gap:8px;margin-top:10px}
   #coordbox button{flex:1;padding:10px;border:none;border-radius:8px;font-weight:700;cursor:pointer}
   #coordbox .ok{background:var(--accent);color:#fff}#coordbox .cancel{background:#eee}
+  #calcbox{position:absolute;inset:0;z-index:2000;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center}
+  #calcbox .inner{background:#fff;border-radius:14px;padding:16px;width:min(92%,380px)}
+  #calcbox h3{color:var(--accent);margin-bottom:6px}
+  #calcbox label{font-size:.82rem;color:#444;display:block;margin-top:8px}
+  #calcbox input,#calcbox select{width:100%;padding:9px;margin-top:3px;border:1px solid #bbb;border-radius:8px;font-size:15px}
+  #calcbox .b{display:flex;gap:8px;margin-top:12px}
+  #calcbox button{flex:1;padding:10px;border:none;border-radius:8px;font-weight:700;cursor:pointer}
+  #calcbox .ok{background:var(--accent);color:#fff}#calcbox .cancel{background:#eee}
+  #calcout{margin-top:10px;font-size:.9rem;background:#f4f4ef;border-radius:8px;padding:8px;display:none}
   .note{position:absolute;left:290px;right:150px;bottom:2px;z-index:900;text-align:center;color:#fff;font-size:.64rem;opacity:.5;pointer-events:none}
   .leaflet-control-zoom a{width:40px;height:40px;line-height:40px;font-size:22px;font-weight:700;color:var(--accent)}
   .leaflet-control-zoom{margin-bottom:80px !important}
@@ -65,7 +75,7 @@
 
 <div id="bar">
   <div class="top">
-    <div class="logo">⛏️ GEO<span>LOGIST</span></div>
+    <div class="logo"><svg viewBox="0 0 100 100" width="24" height="24" style="vertical-align:-5px;margin-right:5px"><polygon points="50,15 84,44 50,88 16,44" fill="#ffd400"/><polygon points="30,31 70,31 84,44 16,44" fill="#ffe678"/><g stroke="#2d4a2b" stroke-width="4" fill="none"><line x1="16" y1="44" x2="84" y2="44"/><line x1="50" y1="15" x2="30" y2="31"/><line x1="50" y1="15" x2="70" y2="31"/><line x1="16" y1="44" x2="50" y2="88"/><line x1="84" y1="44" x2="50" y2="88"/><line x1="30" y1="31" x2="50" y2="88"/><line x1="70" y1="31" x2="50" y2="88"/></g></svg>GEO<span>LOGIST</span></div>
     <div class="modebtns">
       <button id="mView" class="on" onclick="setMode('view')">🗺️ Ona Madini</button>
       <button id="mMeas" onclick="setMode('measure')">📐 Pima</button>
@@ -97,8 +107,27 @@
   </div>
 </div>
 
+<div id="calcbox">
+  <div class="inner">
+    <h3>🧮 Kikokotoo cha Eneo</h3>
+    <div style="font-size:.8rem;color:#555">Ingiza urefu na upana (mstatili) upate eneo.</div>
+    <label>Kipimo</label>
+    <select id="calcUnit"><option value="m">Mita (m)</option><option value="ft">Futi (ft)</option></select>
+    <label>Urefu</label>
+    <input id="calcLen" type="number" inputmode="decimal" placeholder="mfano 120"/>
+    <label>Upana</label>
+    <input id="calcWid" type="number" inputmode="decimal" placeholder="mfano 85"/>
+    <div id="calcout"></div>
+    <div class="b">
+      <button class="ok" onclick="calcArea()">Hesabu</button>
+      <button class="cancel" onclick="document.getElementById('calcbox').style.display='none'">Funga</button>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
 const HOTSPOTS={"dodoma":[[-6.27882,35.68834,0.981,1],[-6.279,35.68852,0.977,2],[-6.279,35.68834,0.973,3],[-6.27882,35.68852,0.97,4],[-6.27846,35.68852,0.966,5],[-6.27882,35.6887,0.961,6],[-6.27864,35.68852,0.959,7],[-6.29293,35.65066,0.957,8],[-6.28864,35.64179,0.956,9],[-6.28576,35.70879,0.953,10],[-6.28828,35.64197,0.953,11],[-6.28882,35.64161,0.951,12],[-6.14675,35.64343,0.951,13],[-6.29275,35.65048,0.948,14],[-6.27918,35.68834,0.948,15],[-6.28558,35.70879,0.946,16],[-6.29311,35.65031,0.945,17],[-6.27864,35.6887,0.944,18],[-6.28918,35.64234,0.943,19],[-6.29293,35.65048,0.943,20],[-6.14693,35.64325,0.943,21],[-6.28587,35.79115,0.941,22],[-6.28936,35.64234,0.941,23],[-6.29311,35.65121,0.941,24],[-6.27864,35.68834,0.94,25],[-6.29329,35.65049,0.94,26],[-6.23818,35.68416,0.94,27],[-6.22913,35.72168,0.939,28],[-6.238,35.68416,0.938,29],[-6.28587,35.79133,0.938,30],[-6.29311,35.72111,0.938,31],[-6.25462,35.82313,0.936,32],[-6.24449,35.89205,0.936,33],[-6.28737,35.64197,0.936,34],[-6.24299,35.76636,0.936,35],[-6.289,35.64143,0.935,36],[-6.2439,35.76528,0.935,37],[-6.23394,35.62851,0.935,38],[-6.289,35.64179,0.934,39],[-6.28956,35.77708,0.934,40],[-6.28683,35.64178,0.934,41],[-6.24634,35.85017,0.934,42],[-6.24572,35.76348,0.933,43],[-6.28936,35.64216,0.933,44],[-6.25484,35.815,0.932,45],[-6.28665,35.64196,0.932,46],[-6.27389,35.83479,0.932,47],[-6.29132,35.64668,0.931,48],[-6.29329,35.65031,0.93,49],[-6.28809,35.81626,0.93,50],[-6.28719,35.64197,0.93,51],[-6.2942,35.65031,0.929,52],[-6.28972,35.64234,0.929,53],[-6.23123,35.77009,0.929,54],[-6.28756,35.64143,0.929,55],[-6.29348,35.64904,0.929,56],[-6.26751,35.91078,0.928,57],[-6.24264,35.76564,0.928,58],[-6.28358,35.64141,0.928,59],[-6.24598,35.85107,0.928,60],[-6.28587,35.79151,0.928,61],[-6.28179,35.8444,0.928,62],[-6.14657,35.64343,0.927,63],[-6.27846,35.68834,0.927,64],[-6.28569,35.79169,0.927,65],[-6.29402,35.64995,0.927,66],[-6.26923,35.6193,0.927,67],[-6.30064,35.83403,0.926,68],[-6.29347,35.72093,0.926,69],[-6.29877,35.84612,0.926,70],[-6.24572,35.7633,0.926,71],[-6.29311,35.65103,0.925,72],[-6.27407,35.83479,0.925,73],[-6.26634,35.6899,0.924,74],[-6.28918,35.64216,0.924,75],[-6.28569,35.79133,0.924,76],[-6.14694,35.64289,0.924,77],[-6.24662,35.76331,0.924,78],[-6.24028,35.76671,0.924,79],[-6.29373,35.80961,0.924,80],[-6.23394,35.62833,0.924,81],[-6.28577,35.70861,0.923,82],[-6.29859,35.84612,0.923,83],[-6.29545,35.65266,0.923,84],[-6.28846,35.64179,0.923,85],[-6.29257,35.65048,0.923,86],[-6.28756,35.64161,0.923,87],[-6.28683,35.64196,0.923,88],[-6.29455,35.65122,0.922,89],[-6.2459,35.76385,0.922,90],[-6.26336,35.74263,0.922,91],[-6.20447,35.66665,0.922,92],[-6.22805,35.92338,0.922,93],[-6.1738,35.61864,0.922,94],[-6.243,35.76618,0.922,95],[-6.28737,35.64179,0.921,96],[-6.14657,35.64361,0.921,97],[-6.14675,35.64325,0.921,98],[-6.27131,35.74249,0.921,99],[-6.28605,35.79115,0.92,100],[-6.29078,35.64668,0.92,101],[-6.19411,35.81847,0.92,102],[-6.29456,35.65103,0.92,103],[-6.24763,35.84548,0.92,104],[-6.28587,35.79169,0.92,105],[-6.2459,35.76421,0.92,106],[-6.29185,35.64958,0.92,107],[-6.14694,35.64307,0.919,108],[-6.26616,35.69008,0.919,109],[-6.24634,35.85035,0.919,110],[-6.22895,35.72168,0.919,111],[-6.29329,35.72111,0.919,112],[-6.28467,35.64105,0.919,113],[-6.14693,35.64343,0.919,114],[-6.25444,35.82349,0.918,115],[-6.23304,35.7701,0.918,116],[-6.20447,35.66683,0.918,117],[-6.29848,35.83293,0.917,118],[-6.02098,35.92316,0.917,119],[-6.2459,35.76367,0.917,120],[-6.30082,35.83403,0.917,121],[-6.22913,35.7215,0.917,122],[-6.289,35.64161,0.917,123],[-6.24572,35.76402,0.917,124],[-6.28811,35.63908,0.916,125],[-6.24782,35.84512,0.916,126],[-6.14712,35.64325,0.916,127],[-6.28321,35.84965,0.916,128],[-6.248,35.84494,0.916,129],[-6.2614,35.80655,0.915,130],[-6.29115,35.6465,0.915,131],[-6.23412,35.62851,0.915,132],[-6.28793,35.63926,0.915,133],[-6.29402,35.65013,0.915,134],[-6.2459,35.76403,0.915,135],[-6.2881,35.81464,0.915,136],[-6.273,35.73148,0.915,137],[-6.28569,35.79115,0.915,138],[-6.29293,35.65157,0.914,139],[-6.29167,35.64957,0.914,140],[-6.24598,35.85089,0.914,141],[-6.28846,35.64197,0.914,142],[-6.29047,35.77726,0.914,143],[-6.27425,35.83497,0.913,144],[-6.28358,35.64159,0.913,145],[-6.26067,35.806,0.913,146],[-6.28792,35.81464,0.913,147],[-6.23818,35.68434,0.913,148],[-6.29859,35.8463,0.913,149],[-6.22877,35.7215,0.913,150]],"manyara":[[-3.68831,36.97792,0.912,1],[-3.68831,36.97774,0.904,2],[-3.6911,37.09204,0.895,3],[-3.5285,36.99501,0.894,4],[-3.52868,36.99519,0.889,5],[-3.53699,36.99176,0.889,6],[-3.52886,36.99609,0.889,7],[-3.52868,36.99537,0.889,8],[-3.52904,36.99591,0.889,9],[-3.52832,36.99556,0.888,10],[-3.52832,36.99502,0.887,11],[-3.52507,36.99826,0.887,12],[-3.52814,36.9952,0.886,13],[-3.5285,36.99519,0.885,14],[-3.52471,36.99772,0.885,15],[-3.52489,36.99808,0.885,16],[-3.52796,36.99591,0.885,17],[-3.53717,36.99158,0.884,18],[-3.68907,36.99322,0.884,19],[-3.52201,37.00421,0.884,20],[-3.52832,36.99538,0.884,21],[-3.52453,36.99772,0.883,22],[-3.52886,36.99591,0.883,23],[-3.52435,36.9979,0.883,24],[-3.53229,36.99267,0.883,25],[-3.52489,36.99826,0.883,26],[-3.53699,36.99158,0.882,27],[-3.5285,36.99483,0.882,28],[-3.53592,36.99788,0.882,29],[-3.52453,36.99754,0.881,30],[-3.53681,36.99176,0.881,31],[-3.52201,37.00457,0.881,32],[-3.68849,36.97774,0.881,33],[-3.52868,36.99501,0.88,34],[-3.52778,36.9961,0.88,35],[-3.5285,36.99555,0.879,36],[-3.52832,36.9952,0.879,37],[-3.52471,36.9979,0.879,38],[-3.52507,36.99808,0.879,39],[-3.52471,36.99826,0.878,40],[-3.69398,37.08609,0.878,41],[-3.52453,36.99808,0.878,42],[-3.52489,36.9979,0.878,43],[-3.52706,36.99682,0.878,44],[-3.52453,36.9979,0.878,45],[-3.52489,36.99772,0.877,46],[-3.53592,36.9977,0.877,47],[-3.5196,36.97686,0.877,48],[-3.5285,36.99537,0.876,49],[-3.52904,36.99609,0.876,50],[-3.50194,37.00569,0.876,51],[-3.52056,37.00547,0.876,52],[-3.52237,37.00439,0.876,53],[-3.52147,37.00493,0.876,54],[-3.5023,37.00569,0.876,55],[-3.52471,36.99754,0.875,56],[-3.52147,37.00475,0.875,57],[-3.5361,36.99788,0.875,58],[-3.52814,36.99484,0.875,59],[-3.52507,36.99772,0.875,60],[-3.52706,36.99718,0.875,61],[-3.52129,37.00511,0.875,62],[-3.53592,36.99806,0.875,63],[-3.52814,36.99502,0.875,64],[-3.68907,36.99304,0.874,65],[-3.53193,36.99285,0.874,66],[-3.52742,36.99628,0.874,67],[-3.52129,37.00475,0.874,68],[-3.52183,37.00457,0.874,69],[-3.52111,37.00529,0.873,70],[-3.52489,36.99754,0.873,71],[-3.53717,36.99176,0.873,72],[-3.52147,37.00511,0.873,73],[-3.52886,36.99519,0.872,74],[-3.52471,36.99808,0.872,75],[-3.52002,37.00619,0.872,76],[-3.52129,37.00493,0.872,77],[-3.52904,36.99573,0.871,78],[-3.53337,36.98799,0.871,79],[-3.51978,36.97686,0.871,80],[-3.5139,37.01502,0.871,81],[-3.52886,36.99573,0.871,82],[-3.52666,36.9799,0.871,83],[-3.52075,37.00547,0.871,84],[-3.52219,37.00439,0.871,85],[-3.53574,36.99698,0.871,86],[-3.53538,36.99734,0.87,87],[-3.5361,36.99716,0.87,88],[-3.52742,36.99592,0.87,89],[-3.52796,36.99609,0.87,90],[-3.52471,36.99844,0.87,91],[-3.63974,36.93106,0.87,92],[-3.50176,37.00569,0.87,93],[-3.52326,36.99665,0.87,94],[-3.53103,36.99303,0.87,95],[-3.52975,36.98799,0.87,96],[-3.52038,37.00349,0.87,97],[-3.52093,37.00511,0.87,98],[-3.63902,36.93016,0.87,99],[-3.52726,37.00599,0.869,100],[-3.53121,36.99285,0.869,101],[-3.50012,37.00047,0.869,102],[-3.5352,36.99824,0.869,103],[-3.52666,36.97972,0.869,104],[-3.52038,37.00331,0.869,105],[-3.52865,36.98278,0.869,106],[-3.53538,36.99806,0.869,107],[-3.53501,36.99752,0.869,108],[-3.52453,36.99826,0.869,109],[-3.53537,36.99662,0.869,110],[-3.52311,37.0105,0.869,111],[-3.53556,36.9977,0.869,112],[-3.50247,37.00011,0.868,113],[-3.52183,37.00439,0.868,114],[-3.52129,37.00565,0.868,115],[-3.50592,37.0064,0.868,116],[-3.52471,36.99988,0.868,117],[-3.52708,37.00617,0.868,118],[-3.5292,36.98656,0.868,119],[-3.5196,36.97668,0.868,120],[-3.51551,37.00818,0.868,121],[-3.52922,36.99609,0.868,122],[-3.52201,37.00439,0.868,123],[-3.52706,36.997,0.868,124],[-3.52111,37.00493,0.868,125],[-3.52922,36.99465,0.867,126],[-3.53029,36.98745,0.867,127],[-3.52778,36.99628,0.867,128],[-3.50483,37.00658,0.867,129],[-3.51944,36.9846,0.867,130],[-3.50247,37.00047,0.866,131],[-3.52868,36.99591,0.866,132],[-3.53247,36.99267,0.866,133],[-3.52507,36.9979,0.866,134],[-3.52129,37.00457,0.866,135],[-3.53193,36.99267,0.866,136],[-3.52183,37.00475,0.866,137],[-3.65458,37.0131,0.866,138],[-3.53628,36.99788,0.866,139],[-3.53247,36.99339,0.866,140],[-3.53556,36.99698,0.865,141],[-3.53573,36.99662,0.865,142],[-3.52093,37.00547,0.865,143],[-3.50319,37.00047,0.865,144],[-3.52165,37.00475,0.865,145],[-3.52489,36.99844,0.865,146],[-3.52449,36.97919,0.865,147],[-3.63938,36.93088,0.865,148],[-3.53574,36.99788,0.865,149],[-3.52074,37.00529,0.865,150]],"tanga":[[-5.40054,38.00433,0.931,1],[-5.40036,38.00451,0.915,2],[-5.31958,38.05536,0.906,3],[-5.40036,38.00433,0.904,4],[-5.46908,37.8885,0.893,5],[-5.46908,37.88832,0.889,6],[-5.46872,37.88887,0.889,7],[-5.46854,37.88833,0.889,8],[-5.40072,38.00433,0.887,9],[-5.46872,37.88869,0.887,10],[-5.46836,37.88833,0.886,11],[-5.42167,38.09744,0.885,12],[-5.46872,37.88905,0.885,13],[-5.53597,38.0747,0.884,14],[-5.3194,38.05554,0.884,15],[-5.40054,38.00451,0.883,16],[-5.47656,37.82838,0.88,17],[-5.4689,37.88887,0.88,18],[-5.47746,38.02406,0.879,19],[-5.31939,38.05427,0.878,20],[-5.46854,37.88869,0.878,21],[-5.5736,37.8661,0.878,22],[-5.46854,37.88887,0.877,23],[-5.46818,37.88833,0.877,24],[-5.31978,38.07214,0.877,25],[-5.57414,37.8652,0.877,26],[-5.57737,37.95041,0.876,27],[-5.46908,37.88887,0.876,28],[-5.4689,37.88851,0.875,29],[-5.46854,37.88851,0.875,30],[-5.46836,37.88851,0.874,31],[-5.43625,37.84253,0.874,32],[-5.4689,37.88869,0.874,33],[-5.57755,37.95041,0.873,34],[-5.4689,37.88905,0.873,35],[-5.46908,37.88869,0.873,36],[-5.47764,38.02388,0.873,37],[-5.42906,38.07667,0.872,38],[-5.45427,37.80857,0.871,39],[-5.31837,38.09236,0.871,40],[-5.40123,37.98177,0.871,41],[-5.31763,38.08171,0.87,42],[-5.31763,38.08135,0.869,43],[-5.46818,37.88851,0.868,44],[-5.40054,38.00415,0.866,45],[-5.42944,37.87684,0.866,46],[-5.53455,37.97847,0.866,47],[-5.42782,37.87721,0.865,48],[-5.31939,38.05446,0.865,49],[-5.4137,38.08933,0.864,50],[-5.47764,38.02406,0.864,51],[-5.46854,37.88905,0.864,52],[-5.53455,37.97865,0.863,53],[-5.42888,38.07667,0.863,54],[-5.31781,38.08171,0.863,55],[-5.58402,37.92873,0.862,56],[-5.38897,37.80797,0.862,57],[-5.53355,37.9272,0.862,58],[-5.4689,37.88832,0.861,59],[-5.46836,37.88869,0.861,60],[-5.54694,38.03496,0.861,61],[-5.4137,38.08915,0.86,62],[-5.47746,38.02388,0.86,63],[-5.46836,37.88887,0.859,64],[-5.53473,37.97865,0.859,65],[-5.46168,38.00297,0.859,66],[-5.46937,37.94862,0.858,67],[-5.45427,37.8082,0.858,68],[-5.42675,37.99183,0.858,69],[-5.428,37.87775,0.858,70],[-5.4689,37.88923,0.858,71],[-5.42924,38.07667,0.858,72],[-5.42781,37.87703,0.858,73],[-5.42906,38.07649,0.857,74],[-5.48307,37.82457,0.857,75],[-5.42782,37.87739,0.857,76],[-5.31838,38.09994,0.857,77],[-5.4715,37.82712,0.857,78],[-5.35963,37.88528,0.857,79],[-5.47401,37.81809,0.856,80],[-5.54204,38.02251,0.856,81],[-5.46908,37.88905,0.856,82],[-5.43323,37.86962,0.855,83],[-5.31958,38.05391,0.855,84],[-5.428,37.87757,0.855,85],[-5.40734,37.85721,0.855,86],[-5.42782,37.87757,0.855,87],[-5.55396,37.91037,0.854,88],[-5.35251,38.05928,0.854,89],[-5.54624,38.04598,0.854,90],[-5.4547,37.84322,0.854,91],[-5.35023,37.99015,0.854,92],[-5.46934,37.83615,0.853,93],[-5.53455,37.97829,0.852,94],[-5.44128,37.82339,0.852,95],[-5.41183,37.83897,0.851,96],[-5.47801,37.82585,0.851,97],[-5.45561,37.8434,0.851,98],[-5.48148,37.84299,0.851,99],[-5.42937,37.93406,0.851,100],[-5.32832,38.09325,0.851,101],[-5.30373,37.98824,0.85,102],[-5.53437,37.97829,0.85,103],[-5.30988,37.98643,0.849,104],[-5.46872,37.88851,0.849,105],[-5.46272,37.87083,0.849,106],[-5.43643,37.84253,0.849,107],[-5.45211,37.81164,0.849,108],[-5.54658,38.03569,0.849,109],[-5.4106,37.86316,0.849,110],[-5.42937,37.93425,0.849,111],[-5.30606,38.08678,0.849,112],[-5.54598,37.89992,0.849,113],[-5.30223,38.06766,0.849,114],[-5.46854,37.89121,0.848,115],[-5.42763,37.87703,0.848,116],[-5.40072,38.00451,0.848,117],[-5.4882,37.8567,0.848,118],[-5.55396,37.91055,0.848,119],[-5.46937,37.9488,0.848,120],[-5.45525,37.84268,0.847,121],[-5.48801,37.85616,0.847,122],[-5.43233,37.87449,0.847,123],[-5.42196,37.93895,0.847,124],[-5.41756,37.90972,0.846,125],[-5.44011,37.87267,0.846,126],[-5.53708,37.98027,0.846,127],[-5.5376,37.96763,0.846,128],[-5.46605,37.81973,0.846,129],[-5.30391,37.98806,0.845,130],[-5.54751,38.04922,0.845,131],[-5.38278,37.98414,0.845,132],[-5.48289,37.8253,0.845,133],[-5.35251,38.0591,0.845,134],[-5.31975,38.05391,0.845,135],[-5.37406,38.07784,0.845,136],[-5.40965,38.04295,0.845,137],[-5.36518,38.06251,0.845,138],[-5.31763,38.08153,0.845,139],[-5.53319,37.9281,0.845,140],[-5.37608,38.09606,0.845,141],[-5.46114,38.00279,0.844,142],[-5.41744,37.84239,0.844,143],[-5.45525,37.8425,0.844,144],[-5.46989,37.83958,0.844,145],[-5.43643,37.84272,0.844,146],[-5.30388,38.08065,0.844,147],[-5.40551,37.84729,0.844,148],[-5.3097,37.98661,0.844,149],[-5.40806,37.85631,0.843,150]]};
 const BELTS=[{"name": "Geita Goldfield (Lake Victoria Greenstone Belt)", "region": "Geita", "lat": -2.87, "lon": 32.23, "r": 45, "c": ["gold", "silver"], "d": ["Geita Gold Mine"]}, {"name": "Kahama / Bulyanhulu (Lake Victoria Greenstone Belt)", "region": "Shinyanga", "lat": -3.75, "lon": 32.52, "r": 45, "c": ["gold", "silver", "copper"], "d": ["Bulyanhulu Mine"]}, {"name": "North Mara / Nyamongo (Lake Victoria Greenstone Belt)", "region": "Mara", "lat": -1.45, "lon": 34.4, "r": 45, "c": ["gold"], "d": ["North Mara Gold Mine (Gokona, Nyabirama)"]}, {"name": "Nzega–Sekenke–Singida Goldfields", "region": "Tabora / Singida", "lat": -4.4, "lon": 33.6, "r": 70, "c": ["gold"], "d": ["Nzega (Golden Pride)", "Sekenke", "Singida goldfields"]}, {"name": "Mwadui / Williamson Kimberlite (Almasi)", "region": "Shinyanga", "lat": -3.53, "lon": 33.61, "r": 20, "c": ["diamond"], "d": ["Williamson Diamond Mine (Mwadui pipe — kimberlite kubwa zaidi duniania inayochimbwa)"]}, {"name": "Merelani (Tanzanite + Graphite)", "region": "Manyara (Simanjiro)", "lat": -3.57, "lon": 36.98, "r": 15, "c": ["tanzanite", "graphite", "tsavorite garnet"], "d": ["Merelani tanzanite mines (chanzo pekee duniani cha tanzanite)"]}, {"name": "Kabanga Nickel (Ni-Cu-Co)", "region": "Kagera (Ngara)", "lat": -2.62, "lon": 30.62, "r": 30, "c": ["nickel", "copper", "cobalt"], "d": ["Kabanga Nickel Sulphide Deposit (mojawapo mkubwa/tajiri zaidi duniani ambao haujaendelezwa)"]}, {"name": "Kapalagulu Intrusion (Ni-PGE)", "region": "Kigoma", "lat": -6.05, "lon": 29.9, "r": 25, "c": ["nickel", "platinum group", "copper"], "d": ["Kapalagulu layered intrusion"]}, {"name": "Mpanda Mineral Field (polymetallic)", "region": "Katavi", "lat": -6.35, "lon": 31.07, "r": 45, "c": ["lead", "zinc", "silver", "gold", "copper"], "d": ["Mpanda polymetallic veins"]}, {"name": "Chunya / Lupa Goldfield", "region": "Mbeya", "lat": -8.53, "lon": 33.42, "r": 45, "c": ["gold"], "d": ["Lupa goldfield (Chunya)"]}, {"name": "Panda Hill Carbonatite (Niobium/REE)", "region": "Mbeya (Songwe)", "lat": -8.95, "lon": 33.25, "r": 15, "c": ["niobium", "rare earth elements", "phosphate"], "d": ["Panda Hill carbonatite"]}, {"name": "Liganga Iron (Ti-magnetite + Vanadium)", "region": "Njombe (Ludewa)", "lat": -9.9, "lon": 34.6, "r": 20, "c": ["iron", "titanium", "vanadium"], "d": ["Liganga (hifadhi kubwa zaidi ya chuma TZ, ~126 Mt proven)"]}, {"name": "Mchuchuma–Ketewaka Coalfield", "region": "Njombe (Ludewa)", "lat": -9.72, "lon": 34.66, "r": 25, "c": ["coal"], "d": ["Mchuchuma colliery (Ruhuhu Basin)"]}, {"name": "Mkuju River Uranium", "region": "Ruvuma (Namtumbo)", "lat": -10.85, "lon": 36.7, "r": 35, "c": ["uranium"], "d": ["Mkuju River Project (mojawapo hifadhi kubwa za uranium TZ)"]}, {"name": "Bahi–Manyoni Uranium", "region": "Dodoma / Singida", "lat": -5.8, "lon": 34.8, "r": 50, "c": ["uranium"], "d": ["Bahi & Manyoni playa/paleochannel uranium"]}, {"name": "Winza Ruby/Sapphire", "region": "Dodoma (Mpwapwa)", "lat": -6.4, "lon": 36.4, "r": 15, "c": ["ruby", "sapphire"], "d": ["Winza corundum (ruby ya ubora wa juu)"]}, {"name": "Mahenge (Ruby + Graphite)", "region": "Morogoro (Ulanga)", "lat": -8.68, "lon": 36.72, "r": 30, "c": ["ruby", "spinel", "graphite"], "d": ["Mahenge ruby/spinel", "Epanko & Nachu graphite (jirani)"]}, {"name": "Umba Valley Gemstones", "region": "Tanga (Korogwe/Lushoto)", "lat": -4.6, "lon": 38.4, "r": 35, "c": ["sapphire", "ruby", "garnet", "tourmaline"], "d": ["Umba Valley colored gemstones"]}, {"name": "Handeni Gold (Magambazi)", "region": "Tanga (Handeni)", "lat": -5.45, "lon": 38.0, "r": 30, "c": ["gold"], "d": ["Magambazi gold"]}, {"name": "Nachingwea–Ruangwa Graphite", "region": "Lindi", "lat": -10.35, "lon": 38.6, "r": 45, "c": ["graphite", "gold"], "d": ["Nachu graphite; SE graphite belt"]}, {"name": "Karagwe–Ankolean Tin/Tungsten", "region": "Kagera (Karagwe)", "lat": -1.5, "lon": 31.1, "r": 35, "c": ["tin", "tungsten"], "d": ["Karagwe tin (cassiterite) & wolframite"]}];
@@ -181,6 +210,60 @@ function areaPerim(pts){const a=6378137,f=1/298.257223563,e2=2*f-f*f,r=d=>d*Math
   const xy=pts.map(([la,lo])=>[N*Math.cos(r(la0))*r(lo-lo0),M*r(la-la0)]);let ar=0,pe=0;
   for(let i=0;i<n;i++){const[x1,y1]=xy[i],[x2,y2]=xy[(i+1)%n];ar+=x1*y2-x2*y1;pe+=Math.hypot(x2-x1,y2-y1);}
   return {area:Math.abs(ar/2),perim:pe};}
+const FT=3.280839895, FT2=10.7639104, AC=4046.8564224;
+// Vipimo vya eneo kwa vipimo vyote
+function areaUnits(m2){
+  return (m2/10000).toFixed(4)+' ha &nbsp;·&nbsp; '+m2.toLocaleString(undefined,{maximumFractionDigits:0})+' m² &nbsp;·&nbsp; '+
+         (m2/AC).toFixed(3)+' ekari &nbsp;·&nbsp; '+(m2*FT2).toLocaleString(undefined,{maximumFractionDigits:0})+' ft²';
+}
+// Urefu x upana (bounding box) kwa mita na futi
+function dims(pts){
+  const a=6378137,f=1/298.257223563,e2=2*f-f*f,rad=d=>d*Math.PI/180;
+  const lats=pts.map(p=>p[0]), lons=pts.map(p=>p[1]);
+  const la0=(Math.min(...lats)+Math.max(...lats))/2, s=Math.sin(rad(la0)), w=1-e2*s*s;
+  const M=a*(1-e2)/Math.pow(w,1.5), N=a/Math.sqrt(w);
+  return { w:Math.abs(N*Math.cos(rad(la0))*rad(Math.max(...lons)-Math.min(...lons))),
+           h:Math.abs(M*rad(Math.max(...lats)-Math.min(...lats))) };
+}
+function fmtDims(pts){ const d=dims(pts);
+  return '≈ '+Math.round(d.w)+' m × '+Math.round(d.h)+' m &nbsp;('+Math.round(d.w*FT)+' ft × '+Math.round(d.h*FT)+' ft)'; }
+function ptsList(pts){
+  return '<div style="max-height:96px;overflow:auto;font-family:ui-monospace,monospace;font-size:.7rem;margin-top:4px;background:#f4f4ef;border-radius:6px;padding:5px">'+
+    pts.map((p,i)=>'P'+(i+1)+': '+p[0].toFixed(6)+', '+p[1].toFixed(6)).join('<br>')+'</div>'; }
+
+// Ripoti ya PDF ya eneo (client-side, jsPDF) — inatolewa na kupakuliwa/kusaviwa
+function buildAreaPdf(name, silent){
+  if(aoiPts.length<3){ if(!silent) alert('Pima eneo kwanza (pembe 3+).'); return; }
+  if(!(window.jspdf && window.jspdf.jsPDF)){ if(!silent) alert('Ripoti ya PDF inahitaji internet mara ya kwanza (jsPDF). Jaribu ukiwa mtandaoni.'); return; }
+  const r=areaPerim(aoiPts), d=dims(aoiPts);
+  const clat=aoiPts.reduce((s,p)=>s+p[0],0)/aoiPts.length, clon=aoiPts.reduce((s,p)=>s+p[1],0)/aoiPts.length;
+  const g=commoditiesAt(clat,clon);
+  const nm=name||'Eneo';
+  const doc=new window.jspdf.jsPDF({unit:'mm',format:'a4'}); let y=16;
+  doc.setFontSize(16); doc.setTextColor(61,107,57); doc.text('GEOLOGIST — Ripoti ya Eneo', 14, y); y+=8;
+  doc.setFontSize(11); doc.setTextColor(40,40,40);
+  doc.text('Jina: '+nm, 14, y); y+=6;
+  doc.text('Tarehe: '+new Date().toLocaleString(), 14, y); y+=6;
+  doc.text('Kituo (centroid): '+clat.toFixed(6)+', '+clon.toFixed(6), 14, y); y+=9;
+  doc.setFontSize(13); doc.setTextColor(61,107,57); doc.text('Ukubwa wa eneo', 14, y); y+=6;
+  doc.setFontSize(11); doc.setTextColor(40,40,40);
+  doc.text((r.area/10000).toFixed(4)+' hekta   |   '+Math.round(r.area).toLocaleString()+' m2', 14, y); y+=6;
+  doc.text((r.area/AC).toFixed(3)+' ekari   |   '+Math.round(r.area*FT2).toLocaleString()+' ft2', 14, y); y+=6;
+  doc.text('Vipimo: '+Math.round(d.w)+' m x '+Math.round(d.h)+' m  ('+Math.round(d.w*FT)+' ft x '+Math.round(d.h*FT)+' ft)', 14, y); y+=6;
+  doc.text('Mzunguko: '+(r.perim/1000).toFixed(3)+' km ('+Math.round(r.perim)+' m)', 14, y); y+=9;
+  doc.setFontSize(13); doc.setTextColor(61,107,57); doc.text('Uchunguzi wa madini (kikanda)', 14, y); y+=6;
+  doc.setFontSize(11); doc.setTextColor(40,40,40);
+  doc.text('Madini yanayowezekana: '+(g.commod.join(', ')||'-'), 14, y, {maxWidth:182}); y+=6;
+  const verdict = g.within.length ? 'Ndani ya ukanda wa '+g.within[0].name : 'Karibu na '+g.nearest[0].name+' (~'+g.nearest[0].dist.toFixed(0)+' km)';
+  doc.text(verdict, 14, y, {maxWidth:182}); y+=9;
+  doc.setFontSize(13); doc.setTextColor(61,107,57); doc.text('Points (lat, lon)', 14, y); y+=6;
+  doc.setFontSize(10); doc.setTextColor(40,40,40);
+  aoiPts.forEach((p,i)=>{ if(y>270){doc.addPage(); y=16;} doc.text('P'+(i+1)+':   '+p[0].toFixed(6)+',   '+p[1].toFixed(6), 14, y); y+=5; });
+  y+=5; if(y>265){doc.addPage(); y=16;}
+  doc.setFontSize(8); doc.setTextColor(150,60,30);
+  doc.text('Onyo: Viashiria vya kikanda - SI uthibitisho wa madini. Thibitisha kwa sampuli + maabara shambani. GPS ya simu ni +/- mita chache.', 14, y, {maxWidth:182});
+  doc.save((nm.replace(/[^a-zA-Z0-9_-]+/g,'_')||'eneo')+'_ripoti.pdf');
+}
 function redrawAoi(){aoiLayer.clearLayers();
   aoiPts.forEach((p,i)=>{L.marker(p).addTo(aoiLayer).bindTooltip('P'+(i+1),{permanent:true,direction:'top',className:'ptlabel'});
     L.circleMarker(p,{radius:4,color:'#fff',fillColor:'#B3261E',fillOpacity:1,weight:1}).addTo(aoiLayer);});
@@ -193,15 +276,20 @@ function analyze(){
   const g=commoditiesAt(clat,clon);
   const verdict = g.within.length ? 'Ndani ya ukanda wa '+g.within[0].name : 'Karibu na '+g.nearest[0].name+' (~'+g.nearest[0].dist.toFixed(0)+' km)';
   document.getElementById('panel').innerHTML='<h4>📐 Matokeo</h4>'+
-    '<div class="big">'+(r.area/10000).toFixed(3)+' ha</div>'+
-    '<div style="font-size:.8rem">'+r.area.toLocaleString(undefined,{maximumFractionDigits:0})+' m² · '+(r.area/4046.8564224).toFixed(2)+' acres</div>'+
-    '<div style="font-size:.8rem;margin-top:2px">Mzunguko: '+(r.perim/1000).toFixed(3)+' km</div>'+
+    '<div class="big">'+(r.area/10000).toFixed(4)+' ha</div>'+
+    '<div style="font-size:.78rem">'+areaUnits(r.area)+'</div>'+
+    '<div style="font-size:.8rem;margin-top:3px"><b>Vipimo:</b> '+fmtDims(aoiPts)+'</div>'+
+    '<div style="font-size:.8rem;margin-top:2px">Mzunguko: '+(r.perim/1000).toFixed(3)+' km ('+Math.round(r.perim)+' m)</div>'+
     '<div style="margin-top:6px;border-top:1px solid #eee;padding-top:5px"><b>⛏️ Madini:</b> '+g.commod.join(', ')+'</div>'+
     '<div style="font-size:.78rem;color:#555;margin-top:2px">'+verdict+'</div>'+
-    '<div class="pill" style="background:#1560d8;margin-top:8px;padding:5px 10px;cursor:pointer;display:inline-block" onclick="saveCurrent()">💾 Hifadhi eneo</div>'+
+    '<div style="font-size:.72rem;color:#555;margin-top:4px"><b>Points (lat, lon):</b></div>'+ptsList(aoiPts)+
+    '<div class="pill" style="background:#1560d8;margin-top:8px;padding:5px 10px;cursor:pointer;display:inline-block" onclick="saveCurrent()">💾 Hifadhi eneo</div> '+
+    '<div class="pill" style="background:#7a5c00;margin-top:8px;padding:5px 10px;cursor:pointer;display:inline-block" onclick="buildAreaPdf(\'Eneo\')">📄 Ripoti PDF</div>'+
     '<div style="font-size:.72rem;color:#B3261E;margin-top:5px">⚠️ Viashiria vya kikanda — thibitisha shambani.</div>';
 }
-function clearAoi(){ aoiPts=[]; gpsAcc=[]; aoiLayer.clearLayers();
+function clearAoi(){
+  if(trackWatch!=null){ navigator.geolocation.clearWatch(trackWatch); trackWatch=null; } tracking=false;
+  aoiPts=[]; gpsAcc=[]; aoiLayer.clearLayers();
   if(mode==='measure'){ buildCtx(); document.getElementById('panel').innerHTML='<h4>📐 Pima &amp; Chunguza</h4><div style="font-size:.8rem;color:#555">Bonyeza «✏️ Weka pembe» kisha gusa ramani kwenye kila kona ya eneo, au «Andika coords».</div>'; }
   else if(mode==='gps'){ buildCtx(); renderGps('Simama kwenye kona ya kwanza, bonyeza «📍 Rekodi kona hapa».'); } }
 
@@ -210,13 +298,16 @@ function renderGps(msg){
   let h='<h4>🚶 Survey ya GPS</h4>';
   if(msg) h+='<div style="font-size:.8rem;color:var(--accent);margin-bottom:4px">'+msg+'</div>';
   if(aoiPts.length>=3){ const r=areaPerim(aoiPts);
-    h+='<div class="big">'+(r.area/10000).toFixed(3)+' ha</div>'+
-       '<div style="font-size:.78rem">'+(r.area/4046.8564224).toFixed(2)+' acres · mzunguko '+(r.perim/1000).toFixed(3)+' km</div>';
+    h+='<div class="big">'+(r.area/10000).toFixed(4)+' ha</div>'+
+       '<div style="font-size:.76rem">'+areaUnits(r.area)+'</div>'+
+       '<div style="font-size:.78rem;margin-top:2px"><b>Vipimo:</b> '+fmtDims(aoiPts)+'</div>'+
+       '<div style="font-size:.78rem">Mzunguko: '+(r.perim/1000).toFixed(3)+' km</div>';
   } else h+='<div style="font-size:.8rem;color:#555">Kona zilizorekodiwa: '+aoiPts.length+' (zinahitajika 3+).</div>';
   if(aoiPts.length){ h+='<div style="max-height:110px;overflow:auto;margin-top:6px;font-size:.72rem;font-family:ui-monospace,monospace">'+
     aoiPts.map((p,i)=>'Kona '+(i+1)+': '+p[0].toFixed(5)+', '+p[1].toFixed(5)+(gpsAcc[i]?' ±'+Math.round(gpsAcc[i])+'m':'')).join('<br>')+'</div>'; }
   if(aoiPts.length>=3) h+='<div class="pill" style="background:var(--accent);margin-top:7px;padding:5px 10px;cursor:pointer;display:inline-block" onclick="analyze()">⛏️ Chunguza madini</div>'+
-    ' <div class="pill" style="background:#1560d8;margin-top:7px;padding:5px 10px;cursor:pointer;display:inline-block" onclick="saveCurrent()">💾 Hifadhi</div>';
+    ' <div class="pill" style="background:#1560d8;margin-top:7px;padding:5px 10px;cursor:pointer;display:inline-block" onclick="saveCurrent()">💾 Hifadhi</div>'+
+    ' <div class="pill" style="background:#7a5c00;margin-top:7px;padding:5px 10px;cursor:pointer;display:inline-block" onclick="buildAreaPdf(\'Eneo\')">📄 PDF</div>';
   h+='<div style="font-size:.7rem;color:#B3261E;margin-top:6px">⚠️ GPS ya simu ±3–10 m. Kwa mipaka RASMI ya leseni tumia RTK/surveyor.</div>';
   document.getElementById('panel').innerHTML=h;
 }
@@ -247,9 +338,56 @@ function captureGps(){
   setTimeout(()=>{ if(gpsWatch!=null) finish(); }, MAXMS+800);
 }
 function undoGps(){ if(aoiPts.length){ aoiPts.pop(); gpsAcc.pop(); redrawAoi(); renderGps(aoiPts.length? 'Kona ya mwisho imefutwa.':'Zimefutwa zote.'); } }
+
+// ---- KUFUATILIA (auto-tracking): tembea mpaka, app inarekodi njia yenyewe ----
+let tracking=false, trackWatch=null;
+const MIN_MOVE=8;   // mita: point mpya inaongezwa ukisonga umbali huu (kuepuka jitter)
+const MAX_ACC=30;   // mita: puuza visomo vyenye usahihi mbaya kuliko hapa
+function startTracking(){
+  if(!navigator.geolocation){ renderGps('GPS haipatikani kwenye kifaa hiki. Tumia app ya Android.'); return; }
+  if(tracking) return;
+  aoiPts=[]; gpsAcc=[]; aoiLayer.clearLayers(); tracking=true; buildCtx();
+  document.getElementById('panel').innerHTML='<h4>🚶 Kufuatilia (tembea mpaka)</h4>'+
+    '<div style="font-size:.82rem;color:var(--accent)">▶️ Simama Point A, kisha ANZA kutembea kuzunguka mpaka wa eneo. Kila unaposonga ~'+MIN_MOVE+' m, point inaongezwa yenyewe. Ukirudi Point A, bonyeza «⏹️ Simamisha».</div>';
+  trackWatch=navigator.geolocation.watchPosition(
+    pos=>{ const c=pos.coords, acc=c.accuracy||9999;
+      if(acc>MAX_ACC){ document.getElementById('panel').innerHTML='<h4>🚶 Kufuatilia</h4><div style="font-size:.82rem;color:#B3261E">📡 Inasubiri usahihi mzuri (sasa ±'+Math.round(acc)+' m)… simama eneo wazi.</div>'; return; }
+      const last=aoiPts[aoiPts.length-1];
+      const moved = last ? hv(last[0],last[1],c.latitude,c.longitude)*1000 : Infinity;
+      if(moved>=MIN_MOVE){
+        aoiPts.push([c.latitude,c.longitude]); gpsAcc.push(acc); redrawAoi();
+        map.setView([c.latitude,c.longitude], Math.max(map.getZoom(),16));
+      }
+      let s='▶️ Kufuatilia… points '+aoiPts.length+' (±'+Math.round(acc)+' m).';
+      if(aoiPts.length>=3){ const r=areaPerim(aoiPts); s+=' Eneo sasa: <b>'+(r.area/10000).toFixed(3)+' ha</b>.'; }
+      s+='<br>Bonyeza «⏹️ Simamisha» ukirudi Point A.';
+      document.getElementById('panel').innerHTML='<h4>🚶 Kufuatilia (tembea mpaka)</h4><div style="font-size:.82rem;color:var(--accent)">'+s+'</div>';
+    },
+    err=>{ renderGps('GPS imeshindwa: '+err.message+'. Ruhusu location.'); tracking=false; trackWatch=null; buildCtx(); },
+    {enableHighAccuracy:true, timeout:20000, maximumAge:1000});
+}
+function stopTracking(){
+  if(trackWatch!=null){ navigator.geolocation.clearWatch(trackWatch); trackWatch=null; }
+  tracking=false; buildCtx();
+  if(aoiPts.length<3){ renderGps('Umesimamisha — points '+aoiPts.length+' hazitoshi (zinahitajika 3+). Jaribu tena ukizunguka eneo lote.'); return; }
+  renderGps('✓ Umemaliza kuzunguka! Points '+aoiPts.length+' zimerekodiwa. Angalia eneo hapa chini na «💾 Hifadhi».');
+}
 map.on('click', e=>{ if(mode==='measure' && clickToAdd){ aoiPts.push([e.latlng.lat,e.latlng.lng]); redrawAoi(); if(aoiPts.length>=3) analyze(); } });
 
 function openCoords(){ document.getElementById('coordinp').value=''; document.getElementById('coordbox').style.display='flex'; }
+function openCalc(){ document.getElementById('calcout').style.display='none'; document.getElementById('calcbox').style.display='flex'; }
+function calcArea(){
+  const unit=document.getElementById('calcUnit').value;
+  let L=parseFloat(document.getElementById('calcLen').value), W=parseFloat(document.getElementById('calcWid').value);
+  if(!(L>0)||!(W>0)){ alert('Ingiza urefu na upana sahihi.'); return; }
+  let Lm=L, Wm=W;
+  if(unit==='ft'){ Lm=L/FT; Wm=W/FT; }         // badilisha futi -> mita
+  const m2=Lm*Wm;
+  const out=document.getElementById('calcout');
+  out.style.display='block';
+  out.innerHTML='<b>Eneo:</b> '+(m2/10000).toFixed(4)+' ha<br>'+areaUnits(m2)+
+    '<br><span style="color:#555;font-size:.8rem">Vipimo: '+Math.round(Lm)+' m × '+Math.round(Wm)+' m ('+Math.round(Lm*FT)+' ft × '+Math.round(Wm*FT)+' ft)</span>';
+}
 function applyCoords(){
   const sc=parseScalars(document.getElementById('coordinp').value); const pts=[];
   for(let i=0;i+1<sc.length;i+=2) pts.push([sc[i],sc[i+1]]);
@@ -288,7 +426,8 @@ async function saveCurrent(){
       const res=await fetch(API_BASE+'/api/surveys',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
       if(!res.ok) throw 0;
       const rec=await res.json();
-      alert('✓ Imehifadhiwa BACKEND: '+rec.name+' ('+rec.area_ha+' ha).');
+      alert('✓ Imehifadhiwa BACKEND: '+rec.name+' ('+rec.area_ha+' ha). Ripoti ya PDF inatengenezwa.');
+      buildAreaPdf(body.name, true);
       renderSidebar(); toggleSidebar(true); return;
     }catch(e){ /* anguka kwa offline */ }
   }
@@ -296,7 +435,8 @@ async function saveCurrent(){
     acres:+(r.area/4046.8564224).toFixed(3), perim_km:+(r.perim/1000).toFixed(4),
     date:new Date().toISOString(), _pending:true };
   const arr=getLocal(); arr.unshift(rec); setLocal(arr);
-  alert('✓ Imehifadhiwa (OFFLINE): '+rec.name+'. Itasync backend ikipatikana.');
+  alert('✓ Imehifadhiwa (OFFLINE): '+rec.name+'. Itasync backend ikipatikana. Ripoti ya PDF inatengenezwa.');
+  buildAreaPdf(body.name, true);
   renderSidebar(); toggleSidebar(true);
 }
 async function loadRecords(){
@@ -333,10 +473,15 @@ async function viewRec(id){
   aoiPts=r.points.map(p=>[p[0],p[1]]); gpsAcc=[]; redrawAoi();
   try{ map.fitBounds(L.polygon(aoiPts).getBounds(),{padding:[50,50]}); }catch(e){}
   toggleSidebar(false);
-  document.getElementById('panel').innerHTML='<h4>📋 '+r.name+'</h4><div class="big">'+r.area_ha+' ha</div>'+
-    '<div style="font-size:.8rem">'+r.acres+' acres · '+r.perim_km+' km mzunguko</div>'+
+  const rr=areaPerim(aoiPts);
+  document.getElementById('panel').innerHTML='<h4>📋 '+r.name+'</h4><div class="big">'+(rr.area/10000).toFixed(4)+' ha</div>'+
+    '<div style="font-size:.76rem">'+areaUnits(rr.area)+'</div>'+
+    '<div style="font-size:.78rem;margin-top:3px"><b>Vipimo:</b> '+fmtDims(aoiPts)+'</div>'+
+    '<div style="font-size:.78rem">Mzunguko: '+(rr.perim/1000).toFixed(3)+' km</div>'+
     '<div style="font-size:.78rem;margin-top:4px"><b>Madini:</b> '+(r.commodities||[]).join(', ')+'</div>'+
-    '<div style="font-size:.72rem;color:#555;margin-top:2px">'+new Date(r.date).toLocaleString()+' · pembe '+r.points.length+'</div>';
+    '<div style="font-size:.72rem;color:#555;margin-top:2px">'+new Date(r.date).toLocaleString()+' · points '+r.points.length+'</div>'+
+    '<div style="font-size:.72rem;color:#555;margin-top:3px"><b>Points (lat, lon):</b></div>'+ptsList(aoiPts)+
+    '<div class="pill" style="background:#7a5c00;margin-top:8px;padding:5px 10px;cursor:pointer;display:inline-block" onclick="buildAreaPdf('+JSON.stringify(r.name)+')">📄 Ripoti PDF</div>';
 }
 async function delRec(id,src){
   if(!confirm('Futa kumbukumbu hii?'))return;
@@ -360,18 +505,23 @@ function buildCtx(){
   } else if(mode==='measure'){
     ctx.innerHTML='<button class="'+(clickToAdd?'on':'')+'" onclick="toggleClick()">✏️ Weka pembe: '+(clickToAdd?'ON':'OFF')+'</button>'+
       '<button onclick="openCoords()">⌨️ Andika coords</button>'+
+      '<button onclick="openCalc()">🧮 Kikokotoo</button>'+
       '<button class="act" onclick="analyze()">⛏️ Chunguza</button>'+
       '<button class="danger" onclick="clearAoi()">Futa</button>';
     document.getElementById('legend').style.display='none';
   } else {  // gps
-    ctx.innerHTML='<button class="act" onclick="captureGps()">📍 Rekodi kona hapa</button>'+
-      '<button onclick="undoGps()">↩ Futa ya mwisho</button>'+
-      '<button class="danger" onclick="clearAoi()">Anza upya</button>';
+    ctx.innerHTML = (tracking
+        ? '<button class="danger" onclick="stopTracking()">⏹️ Simamisha (nimemaliza)</button>'
+        : '<button class="act" onclick="startTracking()">▶️ Anza kufuatilia (tembea)</button>'
+          + '<button onclick="captureGps()">📍 Rekodi kona (moja)</button>'
+          + '<button onclick="undoGps()">↩ Futa ya mwisho</button>'
+          + '<button class="danger" onclick="clearAoi()">Anza upya</button>');
     document.getElementById('legend').style.display='none';
   }
 }
 function toggleClick(){ clickToAdd=!clickToAdd; buildCtx(); }
 function setMode(m){
+  if(trackWatch!=null){ navigator.geolocation.clearWatch(trackWatch); trackWatch=null; } tracking=false;
   mode=m;
   document.getElementById('mView').classList.toggle('on',m==='view');
   document.getElementById('mMeas').classList.toggle('on',m==='measure');
