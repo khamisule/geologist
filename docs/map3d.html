@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="sw">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Geologist 3D — by Khamis Suleiman</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%232d4a2b'/%3E%3Cpolygon points='50,18 82,44 50,86 18,44' fill='%23ffd400'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="lib/maplibre-gl.css"/>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body,#map{height:100%;width:100%;font-family:system-ui,Roboto,sans-serif}
+  #bar{position:absolute;top:0;left:0;right:0;z-index:5;background:linear-gradient(180deg,rgba(45,74,43,.96),rgba(45,74,43,.6));color:#fff;padding:8px 12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  #bar .logo{font-weight:800}#bar .logo span{color:#ffd400}
+  #bar .by{font-size:.62rem;opacity:.85}
+  #bar a,#bar button{background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.4);padding:6px 12px;border-radius:16px;font-size:.85rem;cursor:pointer;text-decoration:none}
+  #bar .sp{flex:1}
+  #tip{position:absolute;left:10px;bottom:12px;z-index:5;background:rgba(255,255,255,.94);border-radius:10px;padding:8px 11px;font-size:.76rem;max-width:250px;box-shadow:0 2px 8px rgba(0,0,0,.4)}
+  #tip b{color:#3d6b39}
+  #load{position:absolute;inset:0;z-index:6;background:#2d4a2b;color:#fff;display:flex;align-items:center;justify-content:center;font-size:.95rem;transition:opacity .5s}
+  #load.hide{opacity:0;pointer-events:none}
+  .maplibregl-popup-content{font-family:system-ui,sans-serif;font-size:.82rem}
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="load">🌍 Inapakia ramani ya 3D…</div>
+<div id="bar">
+  <div class="logo">🌍 GEO<span>LOGIST</span> 3D</div>
+  <span class="by">by Khamis Suleiman</span>
+  <span class="sp"></span>
+  <button onclick="tilt()">↕️ Inamisha</button>
+  <a href="Geologist.html">↩ Rudi 2D</a>
+</div>
+<div id="tip"><b>Ramani ya 3D ya satelaiti</b> — Tanzania pekee. Milima ni halisi (terrain). Njano = maeneo ya dhahabu. Buruta kwa vidole viwili kuinamisha/kuzungusha.</div>
+
+<script src="lib/maplibre-gl.js"></script>
+<script>window.maplibregl||document.write('<scr'+'ipt src="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/3.6.2/maplibre-gl.js"><\/scr'+'ipt>');</script>
+<script>
+if(!window.maplibregl){
+  document.getElementById('load').innerHTML='❌ Maktaba ya 3D haikupakia. Fungua ukiwa na internet mara ya kwanza.';
+  throw new Error('maplibre missing');
+}
+// Maeneo ya dhahabu (migodi + kanda zinazoshukiwa) — sawa na app kuu
+const GOLD=[
+  ["Geita Goldfield",-2.87,32.23,"mgodi"],["North Mara",-1.45,34.4,"mgodi"],["Bulyanhulu/Kahama",-3.75,32.52,"mgodi"],
+  ["Nzega–Sekenke",-4.4,33.6,"mgodi"],["Chunya/Lupa (Mbeya)",-8.53,33.42,"mgodi"],["Handeni/Magambazi (Tanga)",-5.45,38.0,"mgodi"],
+  ["Singida (Ikungi/Sekenke)",-5.13,34.75,"inashukiwa"],["Manyara (Simanjiro)",-4.20,36.93,"inashukiwa"],["Dodoma (Chamwino)",-6.35,36.30,"inashukiwa"],
+  ["Tanga (Kilindi)",-5.75,37.55,"inashukiwa"],["Morogoro (Kilosa)",-6.55,37.00,"inashukiwa"],["Arusha (Monduli)",-3.55,35.90,"inashukiwa"],
+  ["Lindi (Nachingwea)",-10.00,38.20,"inashukiwa"],["Tunduru–Ruvuma",-11.10,37.36,"inashukiwa"],["Mtwara–Masasi",-10.72,38.80,"inashukiwa"],
+  ["Iringa/Njombe",-8.30,35.20,"inashukiwa"],["Kigoma (Kasulu)",-4.90,30.30,"inashukiwa"],["Katavi (Mpanda)",-6.35,31.07,"inashukiwa"]
+];
+const q=new URLSearchParams(location.search);
+const lat=parseFloat(q.get('lat'))|| -6.3, lon=parseFloat(q.get('lon'))||34.9, z=parseFloat(q.get('z'))||6.2;
+
+const map=new maplibregl.Map({
+  container:'map',
+  style:{
+    version:8,
+    sources:{
+      sat:{type:'raster',tiles:['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],tileSize:256,maxzoom:19,attribution:'© Esri, Maxar, Earthstar'},
+      dem:{type:'raster-dem',tiles:['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],encoding:'terrarium',tileSize:256,maxzoom:14,attribution:'© Mapzen/AWS Terrain Tiles'}
+    },
+    layers:[{id:'sat',type:'raster',source:'sat'},{id:'hills',type:'hillshade',source:'dem',paint:{'hillshade-exaggeration':0.5}}],
+    terrain:{source:'dem',exaggeration:1.5}
+  },
+  center:[lon,lat], zoom:z, pitch:62, bearing:-17,
+  maxBounds:[[28.6,-12.15],[40.95,-0.75]],   // Tanzania pekee
+  maxPitch:80
+});
+map.addControl(new maplibregl.NavigationControl({visualizePitch:true}),'bottom-right');
+try{ map.addControl(new maplibregl.TerrainControl({source:'dem',exaggeration:1.5}),'bottom-right'); }catch(e){}
+
+function tilt(){ map.easeTo({pitch: map.getPitch()>40?0:65, duration:800}); }
+
+let loaded=false;
+// Kama haijapakia baada ya sekunde 12, mpe user ujumbe (huenda internet ni dhaifu)
+setTimeout(()=>{ if(!loaded){ const l=document.getElementById('load'); if(l) l.innerHTML='⏳ Inasubiri tiles za satelaiti… hakikisha una internet nzuri.<br><small>Ukishaziona mara moja, zitahifadhiwa kwa offline.</small>'; } }, 12000);
+map.on('load',()=>{
+  loaded=true;
+  document.getElementById('load').classList.add('hide');
+  // weka alama za dhahabu
+  GOLD.forEach(g=>{
+    const [nm,la,lo,kind]=g;
+    const el=document.createElement('div');
+    const suspected = kind==='inashukiwa';
+    el.style.cssText='width:16px;height:16px;border-radius:50%;border:2px solid '+(suspected?'#7a5c00':'#fff')+';background:'+(suspected?'#ffe678':'#ffd400')+';box-shadow:0 0 6px rgba(0,0,0,.5);cursor:pointer';
+    new maplibregl.Marker({element:el})
+      .setLngLat([lo,la])
+      .setPopup(new maplibregl.Popup({offset:14}).setHTML('<b>⭐ '+nm+'</b><br>Dhahabu — '+(suspected?'<b>inayoshukiwa (ASM/kikanda)</b>':'mgodi/kanda inayojulikana')+'<br><span style="color:#B3261E;font-size:.9em">Viashiria; si uthibitisho.</span>'))
+      .addTo(map);
+  });
+});
+map.on('error',e=>{ /* tiles zinaweza kukosa bila internet */ });
+</script>
+</body>
+</html>
