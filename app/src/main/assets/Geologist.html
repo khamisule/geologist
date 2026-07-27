@@ -41,15 +41,6 @@
   #coordbox .b{display:flex;gap:8px;margin-top:10px}
   #coordbox button{flex:1;padding:10px;border:none;border-radius:8px;font-weight:700;cursor:pointer}
   #coordbox .ok{background:var(--accent);color:#fff}#coordbox .cancel{background:#eee}
-  #calcbox{position:absolute;inset:0;z-index:2000;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center}
-  #calcbox .inner{background:#fff;border-radius:14px;padding:16px;width:min(92%,380px)}
-  #calcbox h3{color:var(--accent);margin-bottom:6px}
-  #calcbox label{font-size:.82rem;color:#444;display:block;margin-top:8px}
-  #calcbox input,#calcbox select{width:100%;padding:9px;margin-top:3px;border:1px solid #bbb;border-radius:8px;font-size:15px}
-  #calcbox .b{display:flex;gap:8px;margin-top:12px}
-  #calcbox button{flex:1;padding:10px;border:none;border-radius:8px;font-weight:700;cursor:pointer}
-  #calcbox .ok{background:var(--accent);color:#fff}#calcbox .cancel{background:#eee}
-  #calcout{margin-top:10px;font-size:.9rem;background:#f4f4ef;border-radius:8px;padding:8px;display:none}
   .note{position:absolute;left:290px;right:150px;bottom:2px;z-index:900;text-align:center;color:#fff;font-size:.64rem;opacity:.5;pointer-events:none}
   .leaflet-control-zoom a{width:40px;height:40px;line-height:40px;font-size:22px;font-weight:700;color:var(--accent)}
   .leaflet-control-zoom{margin-bottom:80px !important}
@@ -78,8 +69,7 @@
     <div class="logo"><svg viewBox="0 0 100 100" width="24" height="24" style="vertical-align:-5px;margin-right:5px"><polygon points="50,15 84,44 50,88 16,44" fill="#ffd400"/><polygon points="30,31 70,31 84,44 16,44" fill="#ffe678"/><g stroke="#2d4a2b" stroke-width="4" fill="none"><line x1="16" y1="44" x2="84" y2="44"/><line x1="50" y1="15" x2="30" y2="31"/><line x1="50" y1="15" x2="70" y2="31"/><line x1="16" y1="44" x2="50" y2="88"/><line x1="84" y1="44" x2="50" y2="88"/><line x1="30" y1="31" x2="50" y2="88"/><line x1="70" y1="31" x2="50" y2="88"/></g></svg>GEO<span>LOGIST</span></div>
     <div class="modebtns">
       <button id="mView" class="on" onclick="setMode('view')">🗺️ Ona Madini</button>
-      <button id="mMeas" onclick="setMode('measure')">📐 Pima</button>
-      <button id="mGps" onclick="setMode('gps')">🚶 GPS</button>
+      <button id="mGps" onclick="setMode('gps')">🚶 GPS &amp; Pima</button>
       <button id="mRec" onclick="toggleSidebar()">📋 Historia</button>
     </div>
   </div>
@@ -107,23 +97,7 @@
   </div>
 </div>
 
-<div id="calcbox">
-  <div class="inner">
-    <h3>🧮 Kikokotoo cha Eneo</h3>
-    <div style="font-size:.8rem;color:#555">Ingiza urefu na upana (mstatili) upate eneo.</div>
-    <label>Kipimo</label>
-    <select id="calcUnit"><option value="m">Mita (m)</option><option value="ft">Futi (ft)</option></select>
-    <label>Urefu</label>
-    <input id="calcLen" type="number" inputmode="decimal" placeholder="mfano 120"/>
-    <label>Upana</label>
-    <input id="calcWid" type="number" inputmode="decimal" placeholder="mfano 85"/>
-    <div id="calcout"></div>
-    <div class="b">
-      <button class="ok" onclick="calcArea()">Hesabu</button>
-      <button class="cancel" onclick="document.getElementById('calcbox').style.display='none'">Funga</button>
-    </div>
-  </div>
-</div>
+<input type="file" accept="image/*" capture="environment" id="rockcam" style="display:none" onchange="analyzeRock(this)"/>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js"></script>
@@ -141,14 +115,18 @@ const VIEW_REGIONS=['tanzania','dhahabu',...Object.keys(HOTSPOTS)];
 const sat=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:20,maxNativeZoom:18,attribution:'© Esri, Maxar'});
 const lbl=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',{maxZoom:20,maxNativeZoom:18});
 const gsat=L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',{maxZoom:21,attribution:'© Google'});
-const map=L.map('map',{center:CENTERS.tanzania,zoom:6,layers:[sat,lbl],zoomControl:true});
+const TZ_BOUNDS=L.latLngBounds([[-11.95,29.15],[-0.85,40.75]]);  // mipaka ya Tanzania pekee
+const map=L.map('map',{center:CENTERS.tanzania,zoom:6,minZoom:5,layers:[sat,lbl],zoomControl:true,
+  maxBounds:TZ_BOUNDS, maxBoundsViscosity:1.0});
+map.setMaxBounds(TZ_BOUNDS);
 L.control.scale({imperial:false}).addTo(map);
 L.control.layers({'🛰️ Esri':sat,'🛰️ Google':gsat},{'Maandishi':lbl},{position:'bottomright',collapsed:true}).addTo(map);
 
 let dataLayer=L.layerGroup().addTo(map);   // markers/hotspots za kuona
 let heat=null;
 let aoiLayer=L.layerGroup().addTo(map);    // poligoni ya kupima
-let mode='view', region='tanzania', clickToAdd=false, aoiPts=[], gpsAcc=[];
+let radarLayer=L.layerGroup().addTo(map);  // rada ya madini (1km)
+let mode='view', region='tanzania', clickToAdd=false, aoiPts=[], gpsAcc=[], lastRadar=null;
 
 function color(s){return s>=0.9?'#B3261E':s>=0.85?'#E4761B':'#3d6b39';}
 function hv(a1,o1,a2,o2){const R=6371,r=d=>d*Math.PI/180;const dA=r(a2-a1),dO=r(o2-o1);
@@ -289,13 +267,17 @@ function analyze(){
 }
 function clearAoi(){
   if(trackWatch!=null){ navigator.geolocation.clearWatch(trackWatch); trackWatch=null; } tracking=false;
-  aoiPts=[]; gpsAcc=[]; aoiLayer.clearLayers();
-  if(mode==='measure'){ buildCtx(); document.getElementById('panel').innerHTML='<h4>📐 Pima &amp; Chunguza</h4><div style="font-size:.8rem;color:#555">Bonyeza «✏️ Weka pembe» kisha gusa ramani kwenye kila kona ya eneo, au «Andika coords».</div>'; }
-  else if(mode==='gps'){ buildCtx(); renderGps('Simama kwenye kona ya kwanza, bonyeza «📍 Rekodi kona hapa».'); } }
+  aoiPts=[]; gpsAcc=[]; radarLayer.clearLayers(); aoiLayer.clearLayers();
+  buildCtx(); renderGps(); }
 
 // ---------- MODE: GPS SURVEY (tembea mpaka) ----------
 function renderGps(msg){
-  let h='<h4>🚶 Survey ya GPS</h4>';
+  let h='<h4>🚶 GPS &amp; Pima</h4>';
+  if(!msg && aoiPts.length===0){
+    msg='📡 <b>Rada ya madini</b>: simama eneo, bonyeza «Rada ya madini» → inachunguza duara la 1km. '+
+        '📷 <b>Piga picha mwamba</b> → kiashiria cha madini. '+
+        '📐 <b>Pima eneo</b>: «Tembea mpaka», «Rekodi kona», «Weka pembe», au «Coords».';
+  }
   if(msg) h+='<div style="font-size:.8rem;color:var(--accent);margin-bottom:4px">'+msg+'</div>';
   if(aoiPts.length>=3){ const r=areaPerim(aoiPts);
     h+='<div class="big">'+(r.area/10000).toFixed(4)+' ha</div>'+
@@ -372,22 +354,9 @@ function stopTracking(){
   if(aoiPts.length<3){ renderGps('Umesimamisha — points '+aoiPts.length+' hazitoshi (zinahitajika 3+). Jaribu tena ukizunguka eneo lote.'); return; }
   renderGps('✓ Umemaliza kuzunguka! Points '+aoiPts.length+' zimerekodiwa. Angalia eneo hapa chini na «💾 Hifadhi».');
 }
-map.on('click', e=>{ if(mode==='measure' && clickToAdd){ aoiPts.push([e.latlng.lat,e.latlng.lng]); redrawAoi(); if(aoiPts.length>=3) analyze(); } });
+map.on('click', e=>{ if(mode==='gps' && clickToAdd){ aoiPts.push([e.latlng.lat,e.latlng.lng]); redrawAoi(); if(aoiPts.length>=3) analyze(); } });
 
 function openCoords(){ document.getElementById('coordinp').value=''; document.getElementById('coordbox').style.display='flex'; }
-function openCalc(){ document.getElementById('calcout').style.display='none'; document.getElementById('calcbox').style.display='flex'; }
-function calcArea(){
-  const unit=document.getElementById('calcUnit').value;
-  let L=parseFloat(document.getElementById('calcLen').value), W=parseFloat(document.getElementById('calcWid').value);
-  if(!(L>0)||!(W>0)){ alert('Ingiza urefu na upana sahihi.'); return; }
-  let Lm=L, Wm=W;
-  if(unit==='ft'){ Lm=L/FT; Wm=W/FT; }         // badilisha futi -> mita
-  const m2=Lm*Wm;
-  const out=document.getElementById('calcout');
-  out.style.display='block';
-  out.innerHTML='<b>Eneo:</b> '+(m2/10000).toFixed(4)+' ha<br>'+areaUnits(m2)+
-    '<br><span style="color:#555;font-size:.8rem">Vipimo: '+Math.round(Lm)+' m × '+Math.round(Wm)+' m ('+Math.round(Lm*FT)+' ft × '+Math.round(Wm*FT)+' ft)</span>';
-}
 function applyCoords(){
   const sc=parseScalars(document.getElementById('coordinp').value); const pts=[];
   for(let i=0;i+1<sc.length;i+=2) pts.push([sc[i],sc[i+1]]);
@@ -494,6 +463,184 @@ function exportRecords(){ loadRecords().then(recs=>{
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='geologist_kumbukumbu.json';
   document.body.appendChild(a); a.click(); a.remove(); }); }
 
+// ---------- SAUTI YA BEEP (Web Audio, bila faili, hufanya kazi offline) ----------
+function beep(times, freq){
+  try{
+    const AC=window.AudioContext||window.webkitAudioContext; if(!AC) return;
+    const ctx=new AC(); let t=ctx.currentTime;
+    for(let i=0;i<(times||1);i++){
+      const o=ctx.createOscillator(), g=ctx.createGain();
+      o.type='sine'; o.frequency.value=freq||880;
+      o.connect(g); g.connect(ctx.destination);
+      g.gain.setValueAtTime(0.0001,t);
+      g.gain.exponentialRampToValueAtTime(0.35,t+0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001,t+0.2);
+      o.start(t); o.stop(t+0.22); t+=0.3;
+    }
+  }catch(e){}
+}
+
+// ---------- RADA YA MADINI (duara la 1km kutoka ulipo — kama rada) ----------
+// Data: prospectivity halisi ya Sentinel-2 (HOTSPOTS) + rejea ya mineral belts za TZ (BELTS).
+const RADAR_KM=1;
+let radarWatch=null;
+function mineralRadar(){
+  if(!navigator.geolocation){ document.getElementById('panel').innerHTML='<h4>📡 Rada</h4><div style="color:#B3261E;font-size:.82rem">❌ GPS haipatikani kwenye kifaa hiki. Tumia app ya simu/Android.</div>'; return; }
+  if(radarWatch!=null) return;
+  let best=null,n=0; const TARGET=15,MAXMS=9000,t0=Date.now();
+  document.getElementById('panel').innerHTML='<h4>📡 Rada ya madini (1km)</h4><div style="font-size:.82rem;color:var(--accent)">📡 Inasoma GPS… simama tuli, inasubiri usahihi mzuri.</div>';
+  function finish(){
+    if(radarWatch!=null){ navigator.geolocation.clearWatch(radarWatch); radarWatch=null; }
+    if(!best){ document.getElementById('panel').innerHTML='<h4>📡 Rada</h4><div style="color:#B3261E;font-size:.82rem">❌ GPS haikupata nafasi. Nenda nje/eneo wazi, ruhusu location, jaribu tena.</div>'; return; }
+    radarAt(best.lat,best.lon,best.acc);
+  }
+  radarWatch=navigator.geolocation.watchPosition(
+    pos=>{ const c=pos.coords; n++;
+      if(!best||(c.accuracy||9999)<best.acc) best={lat:c.latitude,lon:c.longitude,acc:c.accuracy||9999};
+      if(best.acc<=TARGET||Date.now()-t0>MAXMS) finish();
+    },
+    err=>{ if(radarWatch!=null){navigator.geolocation.clearWatch(radarWatch);radarWatch=null;}
+      document.getElementById('panel').innerHTML='<h4>📡 Rada</h4><div style="color:#B3261E;font-size:.82rem">❌ '+err.message+'. Ruhusu location (browser inahitaji HTTPS; au tumia app ya Android).</div>'; },
+    {enableHighAccuracy:true,timeout:MAXMS,maximumAge:0});
+  setTimeout(()=>{ if(radarWatch!=null) finish(); }, MAXMS+800);
+}
+function radarAt(lat,lon,acc){
+  radarLayer.clearLayers(); aoiLayer.clearLayers();
+  // duara la rada 1km + kituo (ulipo)
+  L.circle([lat,lon],{radius:RADAR_KM*1000,color:'#ffd400',weight:2,fillColor:'#ffd400',fillOpacity:.08}).addTo(radarLayer);
+  L.circleMarker([lat,lon],{radius:6,color:'#fff',fillColor:'#B3261E',fillOpacity:1,weight:2}).addTo(radarLayer)
+    .bindTooltip('📍 Uliposimama',{permanent:false});
+  map.setView([lat,lon], 14);
+  // 1) mineral belts halisi zinazokuathiri (uko ndani ya radius ya ukanda)
+  const rk=BELTS.map(b=>({b,d:hv(lat,lon,b.lat,b.lon)})).sort((x,y)=>x.d-y.d);
+  const within=rk.filter(x=>x.d<=x.b.r);
+  const nearest=rk[0];
+  // 2) prospectivity hotspots (Sentinel-2 halisi) ndani ya 1km
+  let hot=[];
+  for(const reg in HOTSPOTS){ HOTSPOTS[reg].forEach(p=>{ const d=hv(lat,lon,p[0],p[1]); if(d<=RADAR_KM) hot.push({lat:p[0],lon:p[1],sc:p[2],d}); }); }
+  hot.sort((a,b)=>b.sc-a.sc);
+  hot.slice(0,60).forEach(p=>{ L.circleMarker([p.lat,p.lon],{radius:5,color:'#fff',fillColor:color(p.sc),fillOpacity:.9,weight:1}).addTo(radarLayer)
+    .bindPopup('Uwezekano (satelaiti): <b>'+(p.sc*100).toFixed(0)+'%</b>'); });
+  const src = within.length ? within.map(x=>x.b) : [nearest.b];
+  const commod=[...new Set(src.flatMap(b=>b.c))];
+  const strong = hot.length>0 || within.length>0;
+  const maxSc = hot.length ? hot[0].sc : 0;
+  // BEEP: madini yamegunduliwa -> beep 3; hakuna -> beep moja hafifu
+  if(strong) beep(3,940); else beep(1,480);
+  // AUTO-RIPOTI (inaonekana moja kwa moja)
+  let h='<h4>📡 Rada ya madini — 1km</h4>';
+  h+='<div style="font-size:.74rem;color:#555">📍 '+lat.toFixed(6)+', '+lon.toFixed(6)+' (±'+Math.round(acc)+' m)</div>';
+  if(strong){
+    h+='<div style="margin-top:6px;background:#eafbea;border:1px solid #3d6b39;border-radius:8px;padding:7px">'+
+       '<div style="color:#3d6b39;font-weight:800">🔔 KUNA VIASHIRIA VYA MADINI</div>'+
+       '<div style="font-size:.84rem;margin-top:2px"><b>Madini yanayowezekana:</b> '+(commod.join(', ')||'-')+'</div>';
+    if(within.length) h+='<div style="font-size:.78rem;margin-top:2px">Uko NDANI ya ukanda: <b>'+within[0].b.name+'</b></div>';
+    if(hot.length) h+='<div style="font-size:.78rem">Alama za satelaiti ndani ya 1km: <b>'+hot.length+'</b> (juu zaidi '+(maxSc*100).toFixed(0)+'%)</div>';
+    h+='</div>';
+  } else {
+    h+='<div style="margin-top:6px;background:#fff4f0;border:1px solid #E4761B;border-radius:8px;padding:7px">'+
+       '<div style="color:#B3261E;font-weight:800">○ Hakuna kiashiria kikubwa ndani ya 1km</div>'+
+       '<div style="font-size:.8rem;margin-top:2px">Ukanda wa karibu: <b>'+nearest.b.name+'</b> (~'+nearest.d.toFixed(0)+' km)</div>'+
+       '<div style="font-size:.8rem">Madini ya kikanda: '+nearest.b.c.join(', ')+'</div></div>';
+  }
+  h+='<div class="pill" style="background:#7a5c00;margin-top:8px;padding:5px 10px;cursor:pointer;display:inline-block" onclick="buildRadarPdf()">📄 Ripoti ya rada (PDF)</div>';
+  h+='<div style="font-size:.7rem;color:#B3261E;margin-top:6px">⚠️ Viashiria vya kikanda + prospectivity ya satelaiti (Sentinel-2) — SI uthibitisho. Thibitisha kwa sampuli + maabara.</div>';
+  document.getElementById('panel').innerHTML=h;
+  lastRadar={lat,lon,acc,report:{lat,lon,acc,commod,strong,maxSc,hot:hot.length,
+    within:within.map(x=>({name:x.b.name,d:x.d})), nearest:{name:nearest.b.name,d:nearest.d,c:nearest.b.c}}};
+}
+function buildRadarPdf(silent){
+  if(!lastRadar||!lastRadar.report){ if(!silent) alert('Endesha rada kwanza.'); return; }
+  if(!(window.jspdf&&window.jspdf.jsPDF)){ if(!silent) alert('Ripoti ya PDF inahitaji internet mara ya kwanza (jsPDF).'); return; }
+  const R=lastRadar.report;
+  const doc=new window.jspdf.jsPDF({unit:'mm',format:'a4'}); let y=16;
+  doc.setFontSize(16); doc.setTextColor(61,107,57); doc.text('GEOLOGIST — Ripoti ya Rada ya Madini (1km)',14,y); y+=8;
+  doc.setFontSize(11); doc.setTextColor(40,40,40);
+  doc.text('Tarehe: '+new Date().toLocaleString(),14,y); y+=6;
+  doc.text('Eneo (GPS): '+R.lat.toFixed(6)+', '+R.lon.toFixed(6)+'  (+/- '+Math.round(R.acc)+' m)',14,y); y+=6;
+  doc.text('Radius ya uchunguzi: 1.0 km (duara)',14,y); y+=9;
+  doc.setFontSize(13); doc.setTextColor(61,107,57);
+  doc.text(R.strong?'MATOKEO: Kuna viashiria vya madini':'MATOKEO: Hakuna kiashiria kikubwa (ndani ya 1km)',14,y); y+=7;
+  doc.setFontSize(11); doc.setTextColor(40,40,40);
+  doc.text('Madini yanayowezekana: '+(R.commod.join(', ')||'-'),14,y,{maxWidth:182}); y+=6;
+  if(R.within.length){ doc.text('Uko ndani ya ukanda: '+R.within[0].name,14,y,{maxWidth:182}); y+=6; }
+  doc.text('Ukanda wa karibu: '+R.nearest.name+' (~'+R.nearest.d.toFixed(0)+' km)',14,y,{maxWidth:182}); y+=6;
+  doc.text('Alama za satelaiti (prospectivity) ndani ya 1km: '+R.hot+(R.hot?(' | juu zaidi '+(R.maxSc*100).toFixed(0)+'%'):''),14,y,{maxWidth:182}); y+=10;
+  doc.setFontSize(8); doc.setTextColor(150,60,30);
+  doc.text('Onyo: Viashiria vya kikanda + prospectivity ya satelaiti (Sentinel-2). SI uthibitisho wa madini. Thibitisha kwa sampuli na maabara. GPS ya simu ni +/- mita chache.',14,y,{maxWidth:182});
+  doc.save('rada_madini_'+Date.now()+'.pdf');
+}
+
+// ---------- PIGA PICHA YA MWAMBA: kiashiria cha rangi (uchambuzi halisi wa canvas) ----------
+function classifyRock(r,g,b,darkF,metalF,brightF){
+  const mx=Math.max(r,g,b),mn=Math.min(r,g,b),sat=mx-mn;
+  if(metalF>0.15 && r>150 && g>120 && b<150 && r>=g)
+    return {label:"Sulfidi ing'aayo (pyrite/chalcopyrite) — au dhahabu",
+      note:'Mwonekano wa metali ya njano. Pyrite ni "dhahabu ya wapumbavu"; chalcopyrite hubeba shaba. Dhahabu halisi ni laini, hailegei/haing\'ai kama pyrite.',
+      commod:['gold','copper','pyrite/sulphides']};
+  if(metalF>0.15 && sat<30)
+    return {label:'Metali/kijivu ing\'aayo (galena, magnetite, arsenopyrite)',
+      note:'Ung\'aavu wa metali usio na rangi kali: galena (risasi), magnetite (chuma, huvuta sumaku), arsenopyrite.',
+      commod:['lead','iron','sulphides']};
+  if(r>120 && r>g+25 && g>b)
+    return {label:'Oksidi za chuma / gossan (kutu-machungwa)',
+      note:'Rangi ya kutu = iron oxide (limonite/hematite). Gossan (kofia ya kutu juu ya sulfidi) ni KIASHIRIA muhimu cha dhahabu/shaba chini.',
+      commod:['iron','gold (pathfinder)','copper']};
+  if(g>r && g>b && g>90)
+    return {label:'Kijani — shaba (malachite) au madini ya chlorite',
+      note:'Kijani angavu = shaba (malachite/chrysocolla). Kijani hafifu = chlorite/serpentine (kawaida katika greenstone yenye dhahabu).',
+      commod:['copper','nickel','gold (greenstone)']};
+  if(b>r && b>g && b>90)
+    return {label:'Bluu/zambarau — vito (tanzanite/sapphire) uwezekano',
+      note:'Kwenye kanda za vito (Merelani, Umba, Winza) huweza kuwa tanzanite/sapphire. Nje ya kanda hizo mara nyingi ni azurite/mengine.',
+      commod:['tanzanite','sapphire']};
+  if(r>140 && r>g+30 && r>b+30)
+    return {label:'Nyekundu — garnet/ruby uwezekano (kanda za vito)',
+      note:'Nyekundu ya fuwele huweza kuwa garnet au ruby (Winza, Mahenge, Umba). Thibitisha ugumu na uwazi.',
+      commod:['ruby','garnet']};
+  if(brightF>0.25 && sat<40)
+    return {label:'Nyeupe/angavu — quartz/calcite/feldspar',
+      note:'Mishipa ya quartz nyeupe mara nyingi hubeba dhahabu (orogenic gold veins). Angalia madoa ya metali ndani ya quartz.',
+      commod:['gold (quartz veins)']};
+  if(darkF>0.3)
+    return {label:'Mwamba mweusi/giza — magnetite/graphite/basalt',
+      note:'Miamba myeusi: magnetite (chuma, huvuta sumaku), graphite (laini, huacha alama), au basalt. Jaribu sumaku na ulaini.',
+      commod:['iron','graphite']};
+  return {label:'Haijulikani wazi kwa rangi',
+    note:'Rangi haitoi kiashiria dhahiri. Piga picha karibu, mwanga mzuri, sehemu safi ya mwamba (si udongo/nyasi).',
+    commod:[]};
+}
+function analyzeRock(input){
+  const f=input.files&&input.files[0]; if(!f) return;
+  const img=new Image();
+  img.onload=function(){
+    const S=72, cv=document.createElement('canvas'); cv.width=S; cv.height=S;
+    const cx=cv.getContext('2d'); cx.drawImage(img,0,0,S,S);
+    let d; try{ d=cx.getImageData(0,0,S,S).data; }catch(e){ alert('Imeshindikana kusoma picha.'); return; }
+    let r=0,g=0,b=0,n=0,dark=0,metal=0,bright=0;
+    for(let i=0;i<d.length;i+=4){ const R=d[i],G=d[i+1],B=d[i+2]; r+=R;g+=G;b+=B;n++;
+      const mx=Math.max(R,G,B),mn=Math.min(R,G,B);
+      if(mx<75) dark++; if(mx>150&&mx-mn<28) metal++; if(mx>200) bright++;
+    }
+    r/=n;g/=n;b/=n;
+    const res=classifyRock(r,g,b,dark/n,metal/n,bright/n);
+    input.value='';
+    let h='<h4>📷 Picha ya mwamba — kiashiria</h4>'+
+      '<div style="display:flex;gap:8px;align-items:center;margin:4px 0">'+
+        '<div style="width:34px;height:34px;border-radius:6px;border:1px solid #ccc;background:rgb('+Math.round(r)+','+Math.round(g)+','+Math.round(b)+')"></div>'+
+        '<div style="font-size:.74rem;color:#555">Rangi kuu: RGB('+Math.round(r)+','+Math.round(g)+','+Math.round(b)+')</div></div>'+
+      '<div style="font-size:.86rem"><b>Uwezekano:</b> '+res.label+'</div>'+
+      '<div style="font-size:.8rem;color:#333;margin-top:3px">'+res.note+'</div>'+
+      (res.commod.length?'<div style="font-size:.8rem;margin-top:4px"><b>Madini ya kuchunguza:</b> '+res.commod.join(', ')+'</div>':'');
+    if(lastRadar) h+='<div style="font-size:.74rem;color:#555;margin-top:3px">Kwenye eneo lako la mwisho, madini ya kikanda: '+commoditiesAt(lastRadar.lat,lastRadar.lon).commod.join(', ')+'</div>';
+    h+='<div style="font-size:.72rem;color:#B3261E;margin-top:6px">⚠️ Hiki ni kiashiria cha RANGI tu — SI utambuzi wa madini. Utambuzi halisi: mtaalamu + vipimo (streak, ugumu, XRF/maabara).</div>';
+    document.getElementById('panel').innerHTML=h;
+    if(res.commod.length) beep(2,760);
+  };
+  img.onerror=function(){ alert('Imeshindwa kufungua picha.'); };
+  img.src=URL.createObjectURL(f);
+}
+
 // ---------- UI ----------
 function buildCtx(){
   const ctx=document.getElementById('ctx');
@@ -502,18 +649,15 @@ function buildCtx(){
     document.getElementById('legend').style.display='block';
     document.getElementById('legend').innerHTML='<div style="font-weight:700;color:var(--accent);margin-bottom:3px">Uwezekano</div>'+
       '<div><span class="dot" style="background:#B3261E"></span>&ge;90%</div><div><span class="dot" style="background:#E4761B"></span>85–90%</div><div><span class="dot" style="background:#3d6b39"></span>&lt;85%</div>';
-  } else if(mode==='measure'){
-    ctx.innerHTML='<button class="'+(clickToAdd?'on':'')+'" onclick="toggleClick()">✏️ Weka pembe: '+(clickToAdd?'ON':'OFF')+'</button>'+
-      '<button onclick="openCoords()">⌨️ Andika coords</button>'+
-      '<button onclick="openCalc()">🧮 Kikokotoo</button>'+
-      '<button class="act" onclick="analyze()">⛏️ Chunguza</button>'+
-      '<button class="danger" onclick="clearAoi()">Futa</button>';
-    document.getElementById('legend').style.display='none';
-  } else {  // gps
+  } else {  // gps & pima (imeunganishwa)
     ctx.innerHTML = (tracking
         ? '<button class="danger" onclick="stopTracking()">⏹️ Simamisha (nimemaliza)</button>'
-        : '<button class="act" onclick="startTracking()">▶️ Anza kufuatilia (tembea)</button>'
-          + '<button onclick="captureGps()">📍 Rekodi kona (moja)</button>'
+        : '<button class="act" onclick="mineralRadar()">📡 Rada ya madini (1km)</button>'
+          + '<button class="act" onclick="document.getElementById(\'rockcam\').click()">📷 Piga picha mwamba</button>'
+          + '<button onclick="startTracking()">▶️ Tembea mpaka</button>'
+          + '<button onclick="captureGps()">📍 Rekodi kona</button>'
+          + '<button class="'+(clickToAdd?'on':'')+'" onclick="toggleClick()">✏️ Weka pembe: '+(clickToAdd?'ON':'OFF')+'</button>'
+          + '<button onclick="openCoords()">⌨️ Coords</button>'
           + '<button onclick="undoGps()">↩ Futa ya mwisho</button>'
           + '<button class="danger" onclick="clearAoi()">Anza upya</button>');
     document.getElementById('legend').style.display='none';
@@ -524,12 +668,10 @@ function setMode(m){
   if(trackWatch!=null){ navigator.geolocation.clearWatch(trackWatch); trackWatch=null; } tracking=false;
   mode=m;
   document.getElementById('mView').classList.toggle('on',m==='view');
-  document.getElementById('mMeas').classList.toggle('on',m==='measure');
   document.getElementById('mGps').classList.toggle('on',m==='gps');
-  if(m==='view'){ aoiLayer.clearLayers(); clickToAdd=false; buildCtx(); renderView(); }
-  else { dataLayer.clearLayers(); if(heat){heat.remove();heat=null;} aoiPts=[]; gpsAcc=[]; aoiLayer.clearLayers(); buildCtx();
-    if(m==='gps') renderGps('Simama kwenye kona ya kwanza, bonyeza «📍 Rekodi kona hapa».');
-    else document.getElementById('panel').innerHTML='<h4>📐 Pima &amp; Chunguza</h4><div style="font-size:.8rem;color:#555">Bonyeza «✏️ Weka pembe» kisha gusa ramani, au «Andika coords».</div>';
+  if(m==='view'){ aoiLayer.clearLayers(); radarLayer.clearLayers(); clickToAdd=false; buildCtx(); renderView(); }
+  else { dataLayer.clearLayers(); if(heat){heat.remove();heat=null;} aoiPts=[]; gpsAcc=[]; clickToAdd=false;
+    aoiLayer.clearLayers(); radarLayer.clearLayers(); buildCtx(); renderGps();
   }
 }
 
