@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Geologist — Mfumo wa Madini Tanzania</title>
+<title>Geologist by Khamis Suleiman</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%232d4a2b'/%3E%3Cpolygon points='50,18 82,44 50,86 18,44' fill='%23ffd400'/%3E%3Cpolygon points='32,31 68,31 82,44 18,44' fill='%23ffe678'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<link rel="stylesheet" href="lib/leaflet.css"/>
 <style>
   :root{--accent:#3d6b39;--dark:#2d4a2b;--hi:#B3261E;--md:#E4761B;--gold:#ffd400;--muted:#6b7280}
   *{box-sizing:border-box;margin:0;padding:0}
@@ -47,7 +47,9 @@
   .ptlabel{background:var(--hi);color:#fff;border:none;font-weight:700;font-size:11px;padding:1px 5px;border-radius:8px}
   @media(max-width:560px){.note{display:none}#panel{max-width:200px;font-size:.78rem}}
   /* Sidebar ya historia (kutoka backend) */
-  #sidebar{position:absolute;top:0;left:0;bottom:0;width:300px;max-width:85vw;z-index:1500;background:#fff;
+  #backdrop{position:absolute;inset:0;z-index:1490;background:rgba(0,0,0,.35);display:none}
+  #backdrop.open{display:block}
+  #sidebar{position:absolute;top:0;left:0;bottom:0;width:300px;max-width:85vw;z-index:1600;background:#fff;
     box-shadow:2px 0 14px rgba(0,0,0,.4);transform:translateX(-100%);transition:transform .25s;display:flex;flex-direction:column}
   #sidebar.open{transform:none}
   #sidebar .sbhead{background:var(--dark);color:#fff;padding:12px 14px;display:flex;align-items:center;gap:8px}
@@ -59,23 +61,38 @@
   .sbitem .nm{font-weight:700}
   .sbitem .mt{font-size:.7rem;color:var(--muted)}
   .sbitem .pill{margin:4px 4px 0 0;padding:2px 8px;cursor:pointer;display:inline-block}
+  /* Splash ya kufungua */
+  #splash{position:absolute;inset:0;z-index:3000;background:linear-gradient(135deg,#3d6b39,#2d4a2b);display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;gap:10px;transition:opacity .6s}
+  #splash.hide{opacity:0;pointer-events:none}
+  #splash .st{font-size:2.1rem;font-weight:800;letter-spacing:1px}
+  #splash .st span{color:#ffd400}
+  #splash .sb{font-size:1.02rem;opacity:.92}
+  #bar .by{font-size:.62rem;opacity:.85;margin-left:2px;white-space:nowrap}
 </style>
 </head>
 <body>
+<div id="splash">
+  <svg viewBox="0 0 100 100" width="76" height="76"><polygon points="50,12 86,44 50,90 14,44" fill="#ffd400"/><polygon points="28,30 72,30 86,44 14,44" fill="#ffe678"/><g stroke="#2d4a2b" stroke-width="4" fill="none"><line x1="14" y1="44" x2="86" y2="44"/><line x1="50" y1="12" x2="28" y2="30"/><line x1="50" y1="12" x2="72" y2="30"/><line x1="14" y1="44" x2="50" y2="90"/><line x1="86" y1="44" x2="50" y2="90"/><line x1="28" y1="30" x2="50" y2="90"/><line x1="72" y1="30" x2="50" y2="90"/></g></svg>
+  <div class="st">GEO<span>LOGIST</span></div>
+  <div class="sb">by Khamis Suleiman</div>
+</div>
 <div id="map"></div>
 
 <div id="bar">
   <div class="top">
     <div class="logo"><svg viewBox="0 0 100 100" width="24" height="24" style="vertical-align:-5px;margin-right:5px"><polygon points="50,15 84,44 50,88 16,44" fill="#ffd400"/><polygon points="30,31 70,31 84,44 16,44" fill="#ffe678"/><g stroke="#2d4a2b" stroke-width="4" fill="none"><line x1="16" y1="44" x2="84" y2="44"/><line x1="50" y1="15" x2="30" y2="31"/><line x1="50" y1="15" x2="70" y2="31"/><line x1="16" y1="44" x2="50" y2="88"/><line x1="84" y1="44" x2="50" y2="88"/><line x1="30" y1="31" x2="50" y2="88"/><line x1="70" y1="31" x2="50" y2="88"/></g></svg>GEO<span>LOGIST</span></div>
+    <span class="by">by Khamis Suleiman</span>
     <div class="modebtns">
       <button id="mView" class="on" onclick="setMode('view')">🗺️ Ona Madini</button>
       <button id="mGps" onclick="setMode('gps')">🚶 GPS &amp; Pima</button>
+      <button id="m3D" onclick="open3D()">🌍 3D</button>
       <button id="mRec" onclick="toggleSidebar()">📋 Historia</button>
     </div>
   </div>
   <div id="ctx"></div>
 </div>
 
+<div id="backdrop" onclick="toggleSidebar(false)"></div>
 <div id="sidebar">
   <div class="sbhead"><h3>📋 Historia ya Maeneo</h3><span class="sbclose" onclick="toggleSidebar(false)">✕</span></div>
   <div id="sbstatus"></div>
@@ -84,6 +101,7 @@
 <div id="panel"></div>
 <div class="legend" id="legend"></div>
 <div class="note">Viashiria vya satelaiti — thibitisha shambani (sampuli + lab).</div>
+<div id="faulthint" style="position:absolute;left:50%;transform:translateX(-50%);bottom:74px;z-index:900;background:rgba(179,38,30,.92);color:#fff;padding:5px 11px;border-radius:9px;font-size:.72rem;display:none;box-shadow:0 2px 8px rgba(0,0,0,.4);max-width:82vw;text-align:center"></div>
 
 <div id="coordbox">
   <div class="inner">
@@ -99,12 +117,34 @@
 
 <input type="file" accept="image/*" capture="environment" id="rockcam" style="display:none" onchange="analyzeRock(this)"/>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<!-- Libraries za NDANI (hufanya kazi offline shambani); CDN ni fallback tu -->
+<script src="lib/leaflet.js"></script>
+<script>window.L||document.write('<scr'+'ipt src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"><\/scr'+'ipt>');</script>
+<script src="lib/leaflet-heat.js"></script>
+<script>(window.L&&L.heatLayer)||document.write('<scr'+'ipt src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js"><\/scr'+'ipt>');</script>
+<script src="lib/jspdf.umd.min.js"></script>
+<script>(window.jspdf&&window.jspdf.jsPDF)||document.write('<scr'+'ipt src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"><\/scr'+'ipt>');</script>
 <script>
 const HOTSPOTS={"dodoma":[[-6.27882,35.68834,0.981,1],[-6.279,35.68852,0.977,2],[-6.279,35.68834,0.973,3],[-6.27882,35.68852,0.97,4],[-6.27846,35.68852,0.966,5],[-6.27882,35.6887,0.961,6],[-6.27864,35.68852,0.959,7],[-6.29293,35.65066,0.957,8],[-6.28864,35.64179,0.956,9],[-6.28576,35.70879,0.953,10],[-6.28828,35.64197,0.953,11],[-6.28882,35.64161,0.951,12],[-6.14675,35.64343,0.951,13],[-6.29275,35.65048,0.948,14],[-6.27918,35.68834,0.948,15],[-6.28558,35.70879,0.946,16],[-6.29311,35.65031,0.945,17],[-6.27864,35.6887,0.944,18],[-6.28918,35.64234,0.943,19],[-6.29293,35.65048,0.943,20],[-6.14693,35.64325,0.943,21],[-6.28587,35.79115,0.941,22],[-6.28936,35.64234,0.941,23],[-6.29311,35.65121,0.941,24],[-6.27864,35.68834,0.94,25],[-6.29329,35.65049,0.94,26],[-6.23818,35.68416,0.94,27],[-6.22913,35.72168,0.939,28],[-6.238,35.68416,0.938,29],[-6.28587,35.79133,0.938,30],[-6.29311,35.72111,0.938,31],[-6.25462,35.82313,0.936,32],[-6.24449,35.89205,0.936,33],[-6.28737,35.64197,0.936,34],[-6.24299,35.76636,0.936,35],[-6.289,35.64143,0.935,36],[-6.2439,35.76528,0.935,37],[-6.23394,35.62851,0.935,38],[-6.289,35.64179,0.934,39],[-6.28956,35.77708,0.934,40],[-6.28683,35.64178,0.934,41],[-6.24634,35.85017,0.934,42],[-6.24572,35.76348,0.933,43],[-6.28936,35.64216,0.933,44],[-6.25484,35.815,0.932,45],[-6.28665,35.64196,0.932,46],[-6.27389,35.83479,0.932,47],[-6.29132,35.64668,0.931,48],[-6.29329,35.65031,0.93,49],[-6.28809,35.81626,0.93,50],[-6.28719,35.64197,0.93,51],[-6.2942,35.65031,0.929,52],[-6.28972,35.64234,0.929,53],[-6.23123,35.77009,0.929,54],[-6.28756,35.64143,0.929,55],[-6.29348,35.64904,0.929,56],[-6.26751,35.91078,0.928,57],[-6.24264,35.76564,0.928,58],[-6.28358,35.64141,0.928,59],[-6.24598,35.85107,0.928,60],[-6.28587,35.79151,0.928,61],[-6.28179,35.8444,0.928,62],[-6.14657,35.64343,0.927,63],[-6.27846,35.68834,0.927,64],[-6.28569,35.79169,0.927,65],[-6.29402,35.64995,0.927,66],[-6.26923,35.6193,0.927,67],[-6.30064,35.83403,0.926,68],[-6.29347,35.72093,0.926,69],[-6.29877,35.84612,0.926,70],[-6.24572,35.7633,0.926,71],[-6.29311,35.65103,0.925,72],[-6.27407,35.83479,0.925,73],[-6.26634,35.6899,0.924,74],[-6.28918,35.64216,0.924,75],[-6.28569,35.79133,0.924,76],[-6.14694,35.64289,0.924,77],[-6.24662,35.76331,0.924,78],[-6.24028,35.76671,0.924,79],[-6.29373,35.80961,0.924,80],[-6.23394,35.62833,0.924,81],[-6.28577,35.70861,0.923,82],[-6.29859,35.84612,0.923,83],[-6.29545,35.65266,0.923,84],[-6.28846,35.64179,0.923,85],[-6.29257,35.65048,0.923,86],[-6.28756,35.64161,0.923,87],[-6.28683,35.64196,0.923,88],[-6.29455,35.65122,0.922,89],[-6.2459,35.76385,0.922,90],[-6.26336,35.74263,0.922,91],[-6.20447,35.66665,0.922,92],[-6.22805,35.92338,0.922,93],[-6.1738,35.61864,0.922,94],[-6.243,35.76618,0.922,95],[-6.28737,35.64179,0.921,96],[-6.14657,35.64361,0.921,97],[-6.14675,35.64325,0.921,98],[-6.27131,35.74249,0.921,99],[-6.28605,35.79115,0.92,100],[-6.29078,35.64668,0.92,101],[-6.19411,35.81847,0.92,102],[-6.29456,35.65103,0.92,103],[-6.24763,35.84548,0.92,104],[-6.28587,35.79169,0.92,105],[-6.2459,35.76421,0.92,106],[-6.29185,35.64958,0.92,107],[-6.14694,35.64307,0.919,108],[-6.26616,35.69008,0.919,109],[-6.24634,35.85035,0.919,110],[-6.22895,35.72168,0.919,111],[-6.29329,35.72111,0.919,112],[-6.28467,35.64105,0.919,113],[-6.14693,35.64343,0.919,114],[-6.25444,35.82349,0.918,115],[-6.23304,35.7701,0.918,116],[-6.20447,35.66683,0.918,117],[-6.29848,35.83293,0.917,118],[-6.02098,35.92316,0.917,119],[-6.2459,35.76367,0.917,120],[-6.30082,35.83403,0.917,121],[-6.22913,35.7215,0.917,122],[-6.289,35.64161,0.917,123],[-6.24572,35.76402,0.917,124],[-6.28811,35.63908,0.916,125],[-6.24782,35.84512,0.916,126],[-6.14712,35.64325,0.916,127],[-6.28321,35.84965,0.916,128],[-6.248,35.84494,0.916,129],[-6.2614,35.80655,0.915,130],[-6.29115,35.6465,0.915,131],[-6.23412,35.62851,0.915,132],[-6.28793,35.63926,0.915,133],[-6.29402,35.65013,0.915,134],[-6.2459,35.76403,0.915,135],[-6.2881,35.81464,0.915,136],[-6.273,35.73148,0.915,137],[-6.28569,35.79115,0.915,138],[-6.29293,35.65157,0.914,139],[-6.29167,35.64957,0.914,140],[-6.24598,35.85089,0.914,141],[-6.28846,35.64197,0.914,142],[-6.29047,35.77726,0.914,143],[-6.27425,35.83497,0.913,144],[-6.28358,35.64159,0.913,145],[-6.26067,35.806,0.913,146],[-6.28792,35.81464,0.913,147],[-6.23818,35.68434,0.913,148],[-6.29859,35.8463,0.913,149],[-6.22877,35.7215,0.913,150]],"manyara":[[-3.68831,36.97792,0.912,1],[-3.68831,36.97774,0.904,2],[-3.6911,37.09204,0.895,3],[-3.5285,36.99501,0.894,4],[-3.52868,36.99519,0.889,5],[-3.53699,36.99176,0.889,6],[-3.52886,36.99609,0.889,7],[-3.52868,36.99537,0.889,8],[-3.52904,36.99591,0.889,9],[-3.52832,36.99556,0.888,10],[-3.52832,36.99502,0.887,11],[-3.52507,36.99826,0.887,12],[-3.52814,36.9952,0.886,13],[-3.5285,36.99519,0.885,14],[-3.52471,36.99772,0.885,15],[-3.52489,36.99808,0.885,16],[-3.52796,36.99591,0.885,17],[-3.53717,36.99158,0.884,18],[-3.68907,36.99322,0.884,19],[-3.52201,37.00421,0.884,20],[-3.52832,36.99538,0.884,21],[-3.52453,36.99772,0.883,22],[-3.52886,36.99591,0.883,23],[-3.52435,36.9979,0.883,24],[-3.53229,36.99267,0.883,25],[-3.52489,36.99826,0.883,26],[-3.53699,36.99158,0.882,27],[-3.5285,36.99483,0.882,28],[-3.53592,36.99788,0.882,29],[-3.52453,36.99754,0.881,30],[-3.53681,36.99176,0.881,31],[-3.52201,37.00457,0.881,32],[-3.68849,36.97774,0.881,33],[-3.52868,36.99501,0.88,34],[-3.52778,36.9961,0.88,35],[-3.5285,36.99555,0.879,36],[-3.52832,36.9952,0.879,37],[-3.52471,36.9979,0.879,38],[-3.52507,36.99808,0.879,39],[-3.52471,36.99826,0.878,40],[-3.69398,37.08609,0.878,41],[-3.52453,36.99808,0.878,42],[-3.52489,36.9979,0.878,43],[-3.52706,36.99682,0.878,44],[-3.52453,36.9979,0.878,45],[-3.52489,36.99772,0.877,46],[-3.53592,36.9977,0.877,47],[-3.5196,36.97686,0.877,48],[-3.5285,36.99537,0.876,49],[-3.52904,36.99609,0.876,50],[-3.50194,37.00569,0.876,51],[-3.52056,37.00547,0.876,52],[-3.52237,37.00439,0.876,53],[-3.52147,37.00493,0.876,54],[-3.5023,37.00569,0.876,55],[-3.52471,36.99754,0.875,56],[-3.52147,37.00475,0.875,57],[-3.5361,36.99788,0.875,58],[-3.52814,36.99484,0.875,59],[-3.52507,36.99772,0.875,60],[-3.52706,36.99718,0.875,61],[-3.52129,37.00511,0.875,62],[-3.53592,36.99806,0.875,63],[-3.52814,36.99502,0.875,64],[-3.68907,36.99304,0.874,65],[-3.53193,36.99285,0.874,66],[-3.52742,36.99628,0.874,67],[-3.52129,37.00475,0.874,68],[-3.52183,37.00457,0.874,69],[-3.52111,37.00529,0.873,70],[-3.52489,36.99754,0.873,71],[-3.53717,36.99176,0.873,72],[-3.52147,37.00511,0.873,73],[-3.52886,36.99519,0.872,74],[-3.52471,36.99808,0.872,75],[-3.52002,37.00619,0.872,76],[-3.52129,37.00493,0.872,77],[-3.52904,36.99573,0.871,78],[-3.53337,36.98799,0.871,79],[-3.51978,36.97686,0.871,80],[-3.5139,37.01502,0.871,81],[-3.52886,36.99573,0.871,82],[-3.52666,36.9799,0.871,83],[-3.52075,37.00547,0.871,84],[-3.52219,37.00439,0.871,85],[-3.53574,36.99698,0.871,86],[-3.53538,36.99734,0.87,87],[-3.5361,36.99716,0.87,88],[-3.52742,36.99592,0.87,89],[-3.52796,36.99609,0.87,90],[-3.52471,36.99844,0.87,91],[-3.63974,36.93106,0.87,92],[-3.50176,37.00569,0.87,93],[-3.52326,36.99665,0.87,94],[-3.53103,36.99303,0.87,95],[-3.52975,36.98799,0.87,96],[-3.52038,37.00349,0.87,97],[-3.52093,37.00511,0.87,98],[-3.63902,36.93016,0.87,99],[-3.52726,37.00599,0.869,100],[-3.53121,36.99285,0.869,101],[-3.50012,37.00047,0.869,102],[-3.5352,36.99824,0.869,103],[-3.52666,36.97972,0.869,104],[-3.52038,37.00331,0.869,105],[-3.52865,36.98278,0.869,106],[-3.53538,36.99806,0.869,107],[-3.53501,36.99752,0.869,108],[-3.52453,36.99826,0.869,109],[-3.53537,36.99662,0.869,110],[-3.52311,37.0105,0.869,111],[-3.53556,36.9977,0.869,112],[-3.50247,37.00011,0.868,113],[-3.52183,37.00439,0.868,114],[-3.52129,37.00565,0.868,115],[-3.50592,37.0064,0.868,116],[-3.52471,36.99988,0.868,117],[-3.52708,37.00617,0.868,118],[-3.5292,36.98656,0.868,119],[-3.5196,36.97668,0.868,120],[-3.51551,37.00818,0.868,121],[-3.52922,36.99609,0.868,122],[-3.52201,37.00439,0.868,123],[-3.52706,36.997,0.868,124],[-3.52111,37.00493,0.868,125],[-3.52922,36.99465,0.867,126],[-3.53029,36.98745,0.867,127],[-3.52778,36.99628,0.867,128],[-3.50483,37.00658,0.867,129],[-3.51944,36.9846,0.867,130],[-3.50247,37.00047,0.866,131],[-3.52868,36.99591,0.866,132],[-3.53247,36.99267,0.866,133],[-3.52507,36.9979,0.866,134],[-3.52129,37.00457,0.866,135],[-3.53193,36.99267,0.866,136],[-3.52183,37.00475,0.866,137],[-3.65458,37.0131,0.866,138],[-3.53628,36.99788,0.866,139],[-3.53247,36.99339,0.866,140],[-3.53556,36.99698,0.865,141],[-3.53573,36.99662,0.865,142],[-3.52093,37.00547,0.865,143],[-3.50319,37.00047,0.865,144],[-3.52165,37.00475,0.865,145],[-3.52489,36.99844,0.865,146],[-3.52449,36.97919,0.865,147],[-3.63938,36.93088,0.865,148],[-3.53574,36.99788,0.865,149],[-3.52074,37.00529,0.865,150]],"tanga":[[-5.40054,38.00433,0.931,1],[-5.40036,38.00451,0.915,2],[-5.31958,38.05536,0.906,3],[-5.40036,38.00433,0.904,4],[-5.46908,37.8885,0.893,5],[-5.46908,37.88832,0.889,6],[-5.46872,37.88887,0.889,7],[-5.46854,37.88833,0.889,8],[-5.40072,38.00433,0.887,9],[-5.46872,37.88869,0.887,10],[-5.46836,37.88833,0.886,11],[-5.42167,38.09744,0.885,12],[-5.46872,37.88905,0.885,13],[-5.53597,38.0747,0.884,14],[-5.3194,38.05554,0.884,15],[-5.40054,38.00451,0.883,16],[-5.47656,37.82838,0.88,17],[-5.4689,37.88887,0.88,18],[-5.47746,38.02406,0.879,19],[-5.31939,38.05427,0.878,20],[-5.46854,37.88869,0.878,21],[-5.5736,37.8661,0.878,22],[-5.46854,37.88887,0.877,23],[-5.46818,37.88833,0.877,24],[-5.31978,38.07214,0.877,25],[-5.57414,37.8652,0.877,26],[-5.57737,37.95041,0.876,27],[-5.46908,37.88887,0.876,28],[-5.4689,37.88851,0.875,29],[-5.46854,37.88851,0.875,30],[-5.46836,37.88851,0.874,31],[-5.43625,37.84253,0.874,32],[-5.4689,37.88869,0.874,33],[-5.57755,37.95041,0.873,34],[-5.4689,37.88905,0.873,35],[-5.46908,37.88869,0.873,36],[-5.47764,38.02388,0.873,37],[-5.42906,38.07667,0.872,38],[-5.45427,37.80857,0.871,39],[-5.31837,38.09236,0.871,40],[-5.40123,37.98177,0.871,41],[-5.31763,38.08171,0.87,42],[-5.31763,38.08135,0.869,43],[-5.46818,37.88851,0.868,44],[-5.40054,38.00415,0.866,45],[-5.42944,37.87684,0.866,46],[-5.53455,37.97847,0.866,47],[-5.42782,37.87721,0.865,48],[-5.31939,38.05446,0.865,49],[-5.4137,38.08933,0.864,50],[-5.47764,38.02406,0.864,51],[-5.46854,37.88905,0.864,52],[-5.53455,37.97865,0.863,53],[-5.42888,38.07667,0.863,54],[-5.31781,38.08171,0.863,55],[-5.58402,37.92873,0.862,56],[-5.38897,37.80797,0.862,57],[-5.53355,37.9272,0.862,58],[-5.4689,37.88832,0.861,59],[-5.46836,37.88869,0.861,60],[-5.54694,38.03496,0.861,61],[-5.4137,38.08915,0.86,62],[-5.47746,38.02388,0.86,63],[-5.46836,37.88887,0.859,64],[-5.53473,37.97865,0.859,65],[-5.46168,38.00297,0.859,66],[-5.46937,37.94862,0.858,67],[-5.45427,37.8082,0.858,68],[-5.42675,37.99183,0.858,69],[-5.428,37.87775,0.858,70],[-5.4689,37.88923,0.858,71],[-5.42924,38.07667,0.858,72],[-5.42781,37.87703,0.858,73],[-5.42906,38.07649,0.857,74],[-5.48307,37.82457,0.857,75],[-5.42782,37.87739,0.857,76],[-5.31838,38.09994,0.857,77],[-5.4715,37.82712,0.857,78],[-5.35963,37.88528,0.857,79],[-5.47401,37.81809,0.856,80],[-5.54204,38.02251,0.856,81],[-5.46908,37.88905,0.856,82],[-5.43323,37.86962,0.855,83],[-5.31958,38.05391,0.855,84],[-5.428,37.87757,0.855,85],[-5.40734,37.85721,0.855,86],[-5.42782,37.87757,0.855,87],[-5.55396,37.91037,0.854,88],[-5.35251,38.05928,0.854,89],[-5.54624,38.04598,0.854,90],[-5.4547,37.84322,0.854,91],[-5.35023,37.99015,0.854,92],[-5.46934,37.83615,0.853,93],[-5.53455,37.97829,0.852,94],[-5.44128,37.82339,0.852,95],[-5.41183,37.83897,0.851,96],[-5.47801,37.82585,0.851,97],[-5.45561,37.8434,0.851,98],[-5.48148,37.84299,0.851,99],[-5.42937,37.93406,0.851,100],[-5.32832,38.09325,0.851,101],[-5.30373,37.98824,0.85,102],[-5.53437,37.97829,0.85,103],[-5.30988,37.98643,0.849,104],[-5.46872,37.88851,0.849,105],[-5.46272,37.87083,0.849,106],[-5.43643,37.84253,0.849,107],[-5.45211,37.81164,0.849,108],[-5.54658,38.03569,0.849,109],[-5.4106,37.86316,0.849,110],[-5.42937,37.93425,0.849,111],[-5.30606,38.08678,0.849,112],[-5.54598,37.89992,0.849,113],[-5.30223,38.06766,0.849,114],[-5.46854,37.89121,0.848,115],[-5.42763,37.87703,0.848,116],[-5.40072,38.00451,0.848,117],[-5.4882,37.8567,0.848,118],[-5.55396,37.91055,0.848,119],[-5.46937,37.9488,0.848,120],[-5.45525,37.84268,0.847,121],[-5.48801,37.85616,0.847,122],[-5.43233,37.87449,0.847,123],[-5.42196,37.93895,0.847,124],[-5.41756,37.90972,0.846,125],[-5.44011,37.87267,0.846,126],[-5.53708,37.98027,0.846,127],[-5.5376,37.96763,0.846,128],[-5.46605,37.81973,0.846,129],[-5.30391,37.98806,0.845,130],[-5.54751,38.04922,0.845,131],[-5.38278,37.98414,0.845,132],[-5.48289,37.8253,0.845,133],[-5.35251,38.0591,0.845,134],[-5.31975,38.05391,0.845,135],[-5.37406,38.07784,0.845,136],[-5.40965,38.04295,0.845,137],[-5.36518,38.06251,0.845,138],[-5.31763,38.08153,0.845,139],[-5.53319,37.9281,0.845,140],[-5.37608,38.09606,0.845,141],[-5.46114,38.00279,0.844,142],[-5.41744,37.84239,0.844,143],[-5.45525,37.8425,0.844,144],[-5.46989,37.83958,0.844,145],[-5.43643,37.84272,0.844,146],[-5.30388,38.08065,0.844,147],[-5.40551,37.84729,0.844,148],[-5.3097,37.98661,0.844,149],[-5.40806,37.85631,0.843,150]]};
 const BELTS=[{"name": "Geita Goldfield (Lake Victoria Greenstone Belt)", "region": "Geita", "lat": -2.87, "lon": 32.23, "r": 45, "c": ["gold", "silver"], "d": ["Geita Gold Mine"]}, {"name": "Kahama / Bulyanhulu (Lake Victoria Greenstone Belt)", "region": "Shinyanga", "lat": -3.75, "lon": 32.52, "r": 45, "c": ["gold", "silver", "copper"], "d": ["Bulyanhulu Mine"]}, {"name": "North Mara / Nyamongo (Lake Victoria Greenstone Belt)", "region": "Mara", "lat": -1.45, "lon": 34.4, "r": 45, "c": ["gold"], "d": ["North Mara Gold Mine (Gokona, Nyabirama)"]}, {"name": "Nzega–Sekenke–Singida Goldfields", "region": "Tabora / Singida", "lat": -4.4, "lon": 33.6, "r": 70, "c": ["gold"], "d": ["Nzega (Golden Pride)", "Sekenke", "Singida goldfields"]}, {"name": "Mwadui / Williamson Kimberlite (Almasi)", "region": "Shinyanga", "lat": -3.53, "lon": 33.61, "r": 20, "c": ["diamond"], "d": ["Williamson Diamond Mine (Mwadui pipe — kimberlite kubwa zaidi duniania inayochimbwa)"]}, {"name": "Merelani (Tanzanite + Graphite)", "region": "Manyara (Simanjiro)", "lat": -3.57, "lon": 36.98, "r": 15, "c": ["tanzanite", "graphite", "tsavorite garnet"], "d": ["Merelani tanzanite mines (chanzo pekee duniani cha tanzanite)"]}, {"name": "Kabanga Nickel (Ni-Cu-Co)", "region": "Kagera (Ngara)", "lat": -2.62, "lon": 30.62, "r": 30, "c": ["nickel", "copper", "cobalt"], "d": ["Kabanga Nickel Sulphide Deposit (mojawapo mkubwa/tajiri zaidi duniani ambao haujaendelezwa)"]}, {"name": "Kapalagulu Intrusion (Ni-PGE)", "region": "Kigoma", "lat": -6.05, "lon": 29.9, "r": 25, "c": ["nickel", "platinum group", "copper"], "d": ["Kapalagulu layered intrusion"]}, {"name": "Mpanda Mineral Field (polymetallic)", "region": "Katavi", "lat": -6.35, "lon": 31.07, "r": 45, "c": ["lead", "zinc", "silver", "gold", "copper"], "d": ["Mpanda polymetallic veins"]}, {"name": "Chunya / Lupa Goldfield", "region": "Mbeya", "lat": -8.53, "lon": 33.42, "r": 45, "c": ["gold"], "d": ["Lupa goldfield (Chunya)"]}, {"name": "Panda Hill Carbonatite (Niobium/REE)", "region": "Mbeya (Songwe)", "lat": -8.95, "lon": 33.25, "r": 15, "c": ["niobium", "rare earth elements", "phosphate"], "d": ["Panda Hill carbonatite"]}, {"name": "Liganga Iron (Ti-magnetite + Vanadium)", "region": "Njombe (Ludewa)", "lat": -9.9, "lon": 34.6, "r": 20, "c": ["iron", "titanium", "vanadium"], "d": ["Liganga (hifadhi kubwa zaidi ya chuma TZ, ~126 Mt proven)"]}, {"name": "Mchuchuma–Ketewaka Coalfield", "region": "Njombe (Ludewa)", "lat": -9.72, "lon": 34.66, "r": 25, "c": ["coal"], "d": ["Mchuchuma colliery (Ruhuhu Basin)"]}, {"name": "Mkuju River Uranium", "region": "Ruvuma (Namtumbo)", "lat": -10.85, "lon": 36.7, "r": 35, "c": ["uranium"], "d": ["Mkuju River Project (mojawapo hifadhi kubwa za uranium TZ)"]}, {"name": "Bahi–Manyoni Uranium", "region": "Dodoma / Singida", "lat": -5.8, "lon": 34.8, "r": 50, "c": ["uranium"], "d": ["Bahi & Manyoni playa/paleochannel uranium"]}, {"name": "Winza Ruby/Sapphire", "region": "Dodoma (Mpwapwa)", "lat": -6.4, "lon": 36.4, "r": 15, "c": ["ruby", "sapphire"], "d": ["Winza corundum (ruby ya ubora wa juu)"]}, {"name": "Mahenge (Ruby + Graphite)", "region": "Morogoro (Ulanga)", "lat": -8.68, "lon": 36.72, "r": 30, "c": ["ruby", "spinel", "graphite"], "d": ["Mahenge ruby/spinel", "Epanko & Nachu graphite (jirani)"]}, {"name": "Umba Valley Gemstones", "region": "Tanga (Korogwe/Lushoto)", "lat": -4.6, "lon": 38.4, "r": 35, "c": ["sapphire", "ruby", "garnet", "tourmaline"], "d": ["Umba Valley colored gemstones"]}, {"name": "Handeni Gold (Magambazi)", "region": "Tanga (Handeni)", "lat": -5.45, "lon": 38.0, "r": 30, "c": ["gold"], "d": ["Magambazi gold"]}, {"name": "Nachingwea–Ruangwa Graphite", "region": "Lindi", "lat": -10.35, "lon": 38.6, "r": 45, "c": ["graphite", "gold"], "d": ["Nachu graphite; SE graphite belt"]}, {"name": "Karagwe–Ankolean Tin/Tungsten", "region": "Kagera (Karagwe)", "lat": -1.5, "lon": 31.1, "r": 35, "c": ["tin", "tungsten"], "d": ["Karagwe tin (cassiterite) & wolframite"]}];
+
+// Kanda za dhahabu ZINAZOSHUKIWA (ASM + kikanda) — mikoa mingi ya TZ ina dhahabu.
+// Vyanzo: IIED (ASM Tanzania), TanzaniaInvest, USGS Minerals Yearbook, Shanta Gold (Singida).
+// UWAZI: hizi ni kanda za KIKANDA/uchimbaji mdogo (ASM) zinazoshukiwa — SI mgodi kamili wala uthibitisho.
+const GOLD_ZONES=[
+  {name:"Singida (Ikungi/Sekenke)", region:"Singida", lat:-5.13, lon:34.75, r:55, note:"Shanta Singida + Sekenke; craton yenye dhahabu."},
+  {name:"Manyara (Simanjiro/Naberera)", region:"Manyara", lat:-4.20, lon:36.93, r:50, note:"Uchimbaji mdogo wa dhahabu (ASM) Manyara."},
+  {name:"Dodoma (Chamwino/Mpwapwa)", region:"Dodoma", lat:-6.35, lon:36.30, r:55, note:"Dodoma greenstone/schist — kanda za dhahabu."},
+  {name:"Tanga (Handeni/Kilindi)", region:"Tanga", lat:-5.75, lon:37.55, r:50, note:"ASM ya dhahabu Tanga (karibu na Magambazi)."},
+  {name:"Morogoro (Kilosa/Gairo)", region:"Morogoro", lat:-6.55, lon:37.00, r:50, note:"Uchimbaji mdogo wa dhahabu Morogoro."},
+  {name:"Arusha (Monduli/Loliondo)", region:"Arusha", lat:-3.55, lon:35.90, r:45, note:"ASM ya dhahabu Arusha."},
+  {name:"Lindi (Nachingwea/Liwale)", region:"Lindi", lat:-10.00, lon:38.20, r:55, note:"Kanda ya kusini-mashariki; dhahabu + graphite."},
+  {name:"Tunduru–Ruvuma (alluvial)", region:"Ruvuma", lat:-11.10, lon:37.36, r:55, note:"Dhahabu ya mabondeni (alluvial) + vito, kusini."},
+  {name:"Mtwara–Masasi (alluvial)", region:"Mtwara", lat:-10.72, lon:38.80, r:45, note:"Ugunduzi wa dhahabu ya alluvial kusini."},
+  {name:"Iringa/Njombe", region:"Iringa", lat:-8.30, lon:35.20, r:45, note:"Viashiria vya dhahabu nyanda za juu kusini."},
+  {name:"Kigoma (Kasulu/Uvinza)", region:"Kigoma", lat:-4.90, lon:30.30, r:45, note:"ASM ya dhahabu magharibi."},
+  {name:"Katavi (Mpanda)", region:"Katavi", lat:-6.35, lon:31.07, r:45, note:"Uwanja wa madini wa Mpanda (dhahabu + polymetallic)."}
+];
 
 // ---------- Ramani (shared) ----------
 const CENTERS={tanzania:[-6.3,34.9],dhahabu:[-4.5,33.8],dodoma:[-6.15,35.8],manyara:[-3.6,37.0],tanga:[-5.45,37.95]};
@@ -120,13 +160,19 @@ const map=L.map('map',{center:CENTERS.tanzania,zoom:6,minZoom:5,layers:[sat,lbl]
   maxBounds:TZ_BOUNDS, maxBoundsViscosity:1.0});
 map.setMaxBounds(TZ_BOUNDS);
 L.control.scale({imperial:false}).addTo(map);
-L.control.layers({'🛰️ Esri':sat,'🛰️ Google':gsat},{'Maandishi':lbl},{position:'bottomright',collapsed:true}).addTo(map);
+const layerCtl=L.control.layers({'🛰️ Esri':sat,'🛰️ Google':gsat},{'Maandishi':lbl},{position:'bottomright',collapsed:true}).addTo(map);
 
 let dataLayer=L.layerGroup().addTo(map);   // markers/hotspots za kuona
 let heat=null;
 let aoiLayer=L.layerGroup().addTo(map);    // poligoni ya kupima
 let radarLayer=L.layerGroup().addTo(map);  // rada ya madini (1km)
-let mode='view', region='tanzania', clickToAdd=false, aoiPts=[], gpsAcc=[], lastRadar=null;
+let faultLayer=L.layerGroup();             // tabaka la nyufa (lineaments) — toggle kwenye layer control
+layerCtl.addOverlay(faultLayer,'🧭 Nyufa (faults)');
+faultLayer.addTo(map);                      // ONEKANE kwa default ukifungua ramani
+map.on('moveend zoomend', ()=>{ if(map.hasLayer(faultLayer)) updateFaultsView(); });
+map.on('overlayadd', e=>{ if(e.layer===faultLayer) updateFaultsView(); });
+map.on('overlayremove', e=>{ if(e.layer===faultLayer){ faultLayer.clearLayers(); faultAutoHeat=null; setFaultHint(''); } });
+let mode='view', region='tanzania', clickToAdd=false, aoiPts=[], gpsAcc=[], lastRadar=null, lastFaults=null;
 
 function color(s){return s>=0.9?'#B3261E':s>=0.85?'#E4761B':'#3d6b39';}
 function hv(a1,o1,a2,o2){const R=6371,r=d=>d*Math.PI/180;const dA=r(a2-a1),dO=r(o2-o1);
@@ -151,12 +197,25 @@ function renderView(){
        .bindPopup('<b>'+(region==='dhahabu'?'⭐ ':'')+b.name+'</b><br>Mkoa: '+b.region+
          '<br>Madini: <b>'+b.c.join(', ')+'</b><br><span style="color:#666">'+b.d.join('; ')+'</span>');
     });
+    // Kanda za dhahabu ZINAZOSHUKIWA (ASM/kikanda) — mikoa mingi ya TZ
+    if(region==='dhahabu'){
+      GOLD_ZONES.forEach(z=>{
+        L.circle([z.lat,z.lon],{radius:z.r*1000,color:'#ffd400',weight:2,dashArray:'6 6',fillColor:'#ffd400',fillOpacity:.10}).addTo(dataLayer)
+         .bindPopup('<b>⭐ '+z.name+'</b><br>Mkoa: '+z.region+'<br><b>Dhahabu — inayoshukiwa (ASM/kikanda)</b><br><span style="color:#666">'+z.note+'</span><br><span style="color:#B3261E;font-size:.8em">Si uthibitisho; thibitisha shambani.</span>');
+        L.circleMarker([z.lat,z.lon],{radius:6,color:'#7a5c00',fillColor:'#ffd400',fillOpacity:.9,weight:2}).addTo(dataLayer);
+      });
+    }
     map.setView(CENTERS[region],ZOOMS[region]);
     const title = region==='dhahabu'?'⭐ Maeneo ya Dhahabu':'Madini ya Tanzania';
+    const zoneRows = region==='dhahabu' ? GOLD_ZONES.map(z=>'<div class="row" onclick="flyTo('+z.lat+','+z.lon+')"><span>'+z.region+' (inashukiwa)</span>'+
+        '<span class="pill" style="background:#ffe678;color:#000">⭐ ASM</span></div>').join('') : '';
     document.getElementById('panel').innerHTML='<h4>'+title+'</h4>'+
-      '<div style="color:#555;font-size:.75rem;margin-bottom:4px">Maeneo '+belts.length+' yanayojulikana. Bonyeza alama.</div>'+
-      belts.slice(0,7).map(b=>'<div class="row" onclick="flyTo('+b.lat+','+b.lon+')"><span>'+b.region+'</span>'+
-        '<span class="pill" style="background:'+(region==='dhahabu'?'#ffd400;color:#000':'#B3261E')+'">'+b.name.split(' ')[0]+'</span></div>').join('');
+      '<div style="color:#555;font-size:.75rem;margin-bottom:4px">'+(region==='dhahabu'
+        ? 'Migodi/kanda '+belts.length+' + kanda '+GOLD_ZONES.length+' zinazoshukiwa (ASM). Dumeza za mistari = zinazoshukiwa.'
+        : 'Maeneo '+belts.length+' yanayojulikana. Bonyeza alama.')+'</div>'+
+      belts.slice(0,6).map(b=>'<div class="row" onclick="flyTo('+b.lat+','+b.lon+')"><span>'+b.region+'</span>'+
+        '<span class="pill" style="background:'+(region==='dhahabu'?'#ffd400;color:#000':'#B3261E')+'">'+b.name.split(' ')[0]+'</span></div>').join('')+
+      zoneRows;
   } else {
     const pts=HOTSPOTS[region], hp=[];
     pts.forEach(p=>{ const[lat,lon,sc,rk]=p; hp.push([lat,lon,Math.max(0,(sc-0.7)/0.3)]);
@@ -375,7 +434,11 @@ function getLocal(){ try{return JSON.parse(localStorage.getItem(LS_KEY)||'[]');}
 function setLocal(a){ try{localStorage.setItem(LS_KEY,JSON.stringify(a));return true;}catch(e){return false;} }
 async function apiTry(){
   if(!API_BASE){ backendUp=false; return false; }
-  try{ const r=await fetch(API_BASE+'/api/health',{cache:'no-store'}); backendUp=r.ok; }catch(e){ backendUp=false; }
+  try{
+    const ctl=new AbortController(); const to=setTimeout(()=>ctl.abort(),2500);  // isigande kamwe
+    const r=await fetch(API_BASE+'/api/health',{cache:'no-store',signal:ctl.signal});
+    clearTimeout(to); backendUp=r.ok;
+  }catch(e){ backendUp=false; }
   return backendUp;
 }
 async function saveCurrent(){
@@ -421,6 +484,7 @@ async function loadRecords(){
 let sidebarOpen=false;
 function toggleSidebar(force){ sidebarOpen=(force===undefined)?!sidebarOpen:force;
   document.getElementById('sidebar').classList.toggle('open',sidebarOpen);
+  document.getElementById('backdrop').classList.toggle('open',sidebarOpen);
   if(sidebarOpen) renderSidebar(); }
 async function renderSidebar(){
   const status=document.getElementById('sbstatus'), list=document.getElementById('sblist');
@@ -546,8 +610,20 @@ function radarAt(lat,lon,acc){
   h+='<div class="pill" style="background:#7a5c00;margin-top:8px;padding:5px 10px;cursor:pointer;display:inline-block" onclick="buildRadarPdf()">📄 Ripoti ya rada (PDF)</div>';
   h+='<div style="font-size:.7rem;color:#B3261E;margin-top:6px">⚠️ Viashiria vya kikanda + prospectivity ya satelaiti (Sentinel-2) — SI uthibitisho. Thibitisha kwa sampuli + maabara.</div>';
   document.getElementById('panel').innerHTML=h;
-  lastRadar={lat,lon,acc,report:{lat,lon,acc,commod,strong,maxSc,hot:hot.length,
+  lastRadar={lat,lon,acc,report:{lat,lon,acc,commod,strong,maxSc,hot:hot.length,faultPct:null,
     within:within.map(x=>({name:x.b.name,d:x.d})), nearest:{name:nearest.b.name,d:nearest.d,c:nearest.b.c}}};
+  // Uchambuzi wa NYUFA (faults) kutoka DEM — dhahabu hupatikana kando ya faults
+  const pf=document.createElement('div'); pf.id='radarFault';
+  pf.style.cssText='font-size:.78rem;color:#555;margin-top:5px;border-top:1px dashed #ddd;padding-top:4px';
+  pf.innerHTML='🧭 Inachambua nyufa (faults) kutoka DEM…';
+  document.getElementById('panel').appendChild(pf);
+  faultScan(lat,lon,res=>{
+    const e=document.getElementById('radarFault'); if(!e) return;
+    if(res.err){ e.innerHTML='🧭 Nyufa (faults): inahitaji internet kupakua DEM.'; return; }
+    lastFaults={lat,lon,...res}; if(map.hasLayer(faultLayer)) updateFaultsView();
+    const pct=(res.density*100).toFixed(1); if(lastRadar&&lastRadar.report) lastRadar.report.faultPct=pct;
+    e.innerHTML='🧭 <b>Nyufa (faults): '+pct+'%</b> — '+(res.density>0.06?'dhahabu ya orogenic hupatikana <b>kando ya faults</b> (eneo la kuvutia).':'msongamano mdogo wa nyufa.');
+  });
 }
 function buildRadarPdf(silent){
   if(!lastRadar||!lastRadar.report){ if(!silent) alert('Endesha rada kwanza.'); return; }
@@ -565,7 +641,9 @@ function buildRadarPdf(silent){
   doc.text('Madini yanayowezekana: '+(R.commod.join(', ')||'-'),14,y,{maxWidth:182}); y+=6;
   if(R.within.length){ doc.text('Uko ndani ya ukanda: '+R.within[0].name,14,y,{maxWidth:182}); y+=6; }
   doc.text('Ukanda wa karibu: '+R.nearest.name+' (~'+R.nearest.d.toFixed(0)+' km)',14,y,{maxWidth:182}); y+=6;
-  doc.text('Alama za satelaiti (prospectivity) ndani ya 1km: '+R.hot+(R.hot?(' | juu zaidi '+(R.maxSc*100).toFixed(0)+'%'):''),14,y,{maxWidth:182}); y+=10;
+  doc.text('Alama za satelaiti (prospectivity) ndani ya 1km: '+R.hot+(R.hot?(' | juu zaidi '+(R.maxSc*100).toFixed(0)+'%'):''),14,y,{maxWidth:182}); y+=6;
+  if(R.faultPct!=null){ doc.text('Nyufa/miundo (faults, DEM lineaments): '+R.faultPct+'% (dhahabu hupatikana kando ya faults)',14,y,{maxWidth:182}); y+=6; }
+  y+=4;
   doc.setFontSize(8); doc.setTextColor(150,60,30);
   doc.text('Onyo: Viashiria vya kikanda + prospectivity ya satelaiti (Sentinel-2). SI uthibitisho wa madini. Thibitisha kwa sampuli na maabara. GPS ya simu ni +/- mita chache.',14,y,{maxWidth:182});
   doc.save('rada_madini_'+Date.now()+'.pdf');
@@ -641,6 +719,97 @@ function analyzeRock(input){
   img.src=URL.createObjectURL(f);
 }
 
+// ---------- NYUFA / MIUNDO (LINEAMENTS) kutoka DEM halisi ----------
+// Dhahabu (orogenic) nyingi hupatikana KANDO ya faults. Tunakokotoa lineaments kwa
+// Sobel edge detection kwenye ELEVATION HALISI (DEM tiles za terrarium — chanzo kile
+// kile cha ramani ya 3D). Mbinu ya kawaida ya remote sensing. INAHITAJI internet.
+function lonlat2tile(lat,lon,z){ const n=Math.pow(2,z);
+  const x=Math.floor((lon+180)/360*n);
+  const y=Math.floor((1-Math.log(Math.tan(lat*Math.PI/180)+1/Math.cos(lat*Math.PI/180))/Math.PI)/2*n);
+  return {x,y}; }
+function tile2lon(x,z){ return x/Math.pow(2,z)*360-180; }
+function tile2lat(y,z){ const nn=Math.PI-2*Math.PI*y/Math.pow(2,z); return 180/Math.PI*Math.atan(0.5*(Math.exp(nn)-Math.exp(-nn))); }
+const F_Z=13, F_MINZOOM=12, F_MAXTILES=20; const faultCache={};
+let faultAutoHeat=null, faultsBusy=false;
+function setFaultHint(t){ const e=document.getElementById('faulthint'); if(e){ e.style.display=t?'block':'none'; e.innerHTML=t||''; } }
+// Chambua tile MOJA ya DEM -> points za lineaments (na cache ili isirudie)
+function faultScanTile(x,y,cb){
+  const key=F_Z+'/'+x+'/'+y, c=faultCache[key];
+  if(c==='err'){ cb(null,true); return; } if(Array.isArray(c)){ cb(c); return; } if(c==='pending'){ cb(null); return; }
+  faultCache[key]='pending';
+  const urls=['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/'+F_Z+'/'+x+'/'+y+'.png',
+              'https://elevation-tiles-prod.s3.amazonaws.com/terrarium/'+F_Z+'/'+x+'/'+y+'.png'];
+  let ui=0; const img=new Image(); img.crossOrigin='anonymous';
+  img.onload=function(){
+    const S=256, cv=document.createElement('canvas'); cv.width=S; cv.height=S;
+    const cx=cv.getContext('2d'); cx.drawImage(img,0,0,S,S);
+    let d; try{ d=cx.getImageData(0,0,S,S).data; }catch(e){ faultCache[key]='err'; cb(null,true); return; }
+    const el=new Float32Array(S*S);
+    for(let i=0;i<S*S;i++){ el[i]=(d[i*4]*256+d[i*4+1]+d[i*4+2]/256)-32768; }  // decode terrarium
+    const mag=new Float32Array(S*S); let mx=0; const at=(a,b)=>el[b*S+a];
+    for(let yy=1;yy<S-1;yy++)for(let xx=1;xx<S-1;xx++){
+      const gx=(at(xx+1,yy-1)+2*at(xx+1,yy)+at(xx+1,yy+1))-(at(xx-1,yy-1)+2*at(xx-1,yy)+at(xx-1,yy+1));
+      const gy=(at(xx-1,yy+1)+2*at(xx,yy+1)+at(xx+1,yy+1))-(at(xx-1,yy-1)+2*at(xx,yy-1)+at(xx+1,yy-1));
+      const m=Math.sqrt(gx*gx+gy*gy); mag[yy*S+xx]=m; if(m>mx)mx=m;
+    }
+    // thr yenye SAKAFU kamili (8 m): kuepuka false-positives kwenye maeneo tambarare (maziwa/bahari)
+    const thr=Math.max(mx*0.4, 8), lon0=tile2lon(x,F_Z),lon1=tile2lon(x+1,F_Z),lat0=tile2lat(y,F_Z),lat1=tile2lat(y+1,F_Z);
+    const pts=[];
+    for(let yy=1;yy<S-1;yy+=3)for(let xx=1;xx<S-1;xx+=3){ if(mag[yy*S+xx]>=thr)
+      pts.push([lat0+(lat1-lat0)*(yy/S), lon0+(lon1-lon0)*(xx/S), Math.min(1,mag[yy*S+xx]/mx)]); }
+    faultCache[key]=pts; cb(pts);
+  };
+  img.onerror=function(){ if(ui<urls.length-1){ ui++; img.src=urls[ui]; } else { faultCache[key]='err'; cb(null,true); } };
+  img.src=urls[0];
+}
+// Tabaka la nyufa AUTO kwa eneo LINALOONEKANA (hujiimarisha ukikaribia/zoom)
+function updateFaultsView(){
+  if(!map.hasLayer(faultLayer)) return;
+  if(map.getZoom()<F_MINZOOM){ faultLayer.clearLayers(); faultAutoHeat=null; setFaultHint('🧭 Nyufa (faults): karibia zaidi (zoom) ili kuona.'); return; }
+  const b=map.getBounds();
+  const tA=lonlat2tile(b.getNorth(),b.getWest(),F_Z), tB=lonlat2tile(b.getSouth(),b.getEast(),F_Z);
+  const x0=Math.min(tA.x,tB.x),x1=Math.max(tA.x,tB.x),y0=Math.min(tA.y,tB.y),y1=Math.max(tA.y,tB.y);
+  const tiles=[]; for(let x=x0;x<=x1;x++)for(let y=y0;y<=y1;y++) tiles.push([x,y]);
+  if(tiles.length>F_MAXTILES){ setFaultHint('🧭 Karibia zaidi ili kuchambua nyufa.'); return; }
+  if(faultsBusy) return; faultsBusy=true; setFaultHint('🧭 Inachambua nyufa (DEM)…');
+  let all=[], done=0, anyErr=false;
+  tiles.forEach(([x,y])=>faultScanTile(x,y,(pts,err)=>{
+    if(pts) all=all.concat(pts); if(err) anyErr=true;
+    if(++done===tiles.length){
+      faultsBusy=false; faultLayer.clearLayers();
+      if(all.length){ faultAutoHeat=L.heatLayer(all,{radius:8,blur:7,minOpacity:.35,gradient:{0.3:'#ff9d5c',0.6:'#B3261E',0.9:'#7a0000'}}); faultLayer.addLayer(faultAutoHeat); }
+      setFaultHint(all.length? '🧭 Nyufa/faults (nyekundu). Dhahabu hupatikana kando ya faults.' : (anyErr?'🧭 Nyufa: inahitaji internet (DEM).':'🧭 Hakuna nyufa dhahiri hapa.'));
+    }
+  }));
+}
+// Uchambuzi wa nyufa kwa NUKTA moja (density kwa rada/ripoti)
+function faultScan(lat,lon,cb){ const t=lonlat2tile(lat,lon,F_Z);
+  faultScanTile(t.x,t.y,(pts,err)=>{ if(err||!pts){ cb({err:err?'net':'none'}); return; }
+    const samples=Math.pow(Math.floor((256-2)/3),2);
+    cb({density: pts.length/samples, pts, z:F_Z}); }); }
+// Kitufe cha Nyufa: washa tabaka + ripoti ya nukta uliposimama
+function runFaults(){
+  if(!map.hasLayer(faultLayer)) faultLayer.addTo(map);
+  let lat,lon; if(lastRadar){ lat=lastRadar.lat; lon=lastRadar.lon; } else { const c=map.getCenter(); lat=c.lat; lon=c.lng; }
+  map.setView([lat,lon], Math.max(map.getZoom(),13));
+  document.getElementById('panel').innerHTML='<h4>🧭 Nyufa / Miundo (faults)</h4><div style="font-size:.82rem;color:var(--accent)">⛰️ Inapakua mwinuko (DEM) na kuchambua nyufa… (internet)</div>';
+  updateFaultsView();
+  faultScan(lat,lon,res=>{
+    if(res.err){ document.getElementById('panel').innerHTML='<h4>🧭 Nyufa</h4><div style="font-size:.82rem;color:#B3261E">❌ '+(res.err==='net'?'Imeshindwa kupata DEM — hakikisha una internet.':'Data ya DEM imezuiwa kwenye kifaa hiki (CORS).')+'</div><div style="font-size:.75rem;color:#555;margin-top:4px">Nyufa zinahitaji internet kupakua mwinuko (DEM).</div>'; return; }
+    lastFaults={lat,lon,...res};
+    const pct=(res.density*100).toFixed(1), lvl=res.density>0.12?'JUU':res.density>0.06?'wastani':'chini';
+    document.getElementById('panel').innerHTML='<h4>🧭 Nyufa / Miundo (faults)</h4>'+
+      '<div style="font-size:.74rem;color:#555">📍 '+lat.toFixed(5)+', '+lon.toFixed(5)+' · DEM z'+res.z+'</div>'+
+      '<div style="margin-top:6px;background:#fff4f0;border:1px solid #B3261E;border-radius:8px;padding:7px">'+
+        '<div style="font-weight:800;color:#B3261E">Msongamano wa nyufa: '+pct+'% ('+lvl+')</div>'+
+        '<div style="font-size:.8rem;margin-top:2px">Nyekundu kwenye ramani = kingo kali za mwinuko (huweza kuwa faults).</div>'+
+        '<div style="font-size:.8rem;margin-top:2px">🔎 Dhahabu ya orogenic hupatikana <b>kando ya faults</b> — nyufa nyingi = kuvutia.</div>'+
+      '</div>'+
+      '<div style="font-size:.7rem;color:#B3261E;margin-top:6px">⚠️ Lineaments za DEM — viashiria, SI ramani rasmi ya faults.</div>';
+    if(res.density>0.06) beep(2,660);
+  });
+}
+
 // ---------- UI ----------
 function buildCtx(){
   const ctx=document.getElementById('ctx');
@@ -653,6 +822,7 @@ function buildCtx(){
     ctx.innerHTML = (tracking
         ? '<button class="danger" onclick="stopTracking()">⏹️ Simamisha (nimemaliza)</button>'
         : '<button class="act" onclick="mineralRadar()">📡 Rada ya madini (1km)</button>'
+          + '<button class="act" onclick="runFaults()">🧭 Nyufa (faults)</button>'
           + '<button class="act" onclick="document.getElementById(\'rockcam\').click()">📷 Piga picha mwamba</button>'
           + '<button onclick="startTracking()">▶️ Tembea mpaka</button>'
           + '<button onclick="captureGps()">📍 Rekodi kona</button>'
@@ -675,8 +845,26 @@ function setMode(m){
   }
 }
 
+// ---------- RAMANI YA 3D (MapLibre + terrain, bure) ----------
+function open3D(){
+  const c=map.getCenter(); const z=Math.max(map.getZoom(),7);
+  location.href='map3d.html?lat='+c.lat.toFixed(5)+'&lon='+c.lng.toFixed(5)+'&z='+z;
+}
+
+// ---------- KITUFE CHA VOLUME (+): huweka point ya GPS shambani (kupitia app ya Android) ----------
+// MainActivity ya Android hukamata kitufe cha sauti (+), kisha huita hii.
+window.__volCapture=function(){
+  if(mode!=='gps'){ setMode('gps'); }
+  if(tracking) return;          // auto-tracking tayari inarekodi yenyewe
+  captureGps();                 // weka kona kwa nafasi ya sasa ya GPS
+};
+
+// ---------- SPLASH (by Khamis Suleiman) ----------
+setTimeout(function(){ var s=document.getElementById('splash'); if(s){ s.classList.add('hide'); setTimeout(function(){ if(s&&s.parentNode) s.parentNode.removeChild(s); }, 700); } }, 1900);
+
 // anza
 buildCtx(); renderView();
+setTimeout(function(){ if(map.hasLayer(faultLayer)) updateFaultsView(); }, 1200);  // nyufa zionekane zikifunguka
 </script>
 </body>
 </html>

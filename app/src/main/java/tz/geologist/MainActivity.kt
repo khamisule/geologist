@@ -52,6 +52,15 @@ class MainActivity : AppCompatActivity() {
         setContentView(web)
     }
 
+    // Kitufe cha SAUTI (+) huweka point ya GPS ukiwa shambani (rahisi kuliko kugusa skrini).
+    override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent?): Boolean {
+        if (keyCode == android.view.KeyEvent.KEYCODE_VOLUME_UP && ::web.isInitialized) {
+            web.evaluateJavascript("window.__volCapture && window.__volCapture();", null)
+            return true  // tumia kitufe kwa kuweka point
+        }
+        return super.onKeyDown(keyCode, event)
+    }
+
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
         if (::web.isInitialized && web.canGoBack()) web.goBack() else super.onBackPressed()
