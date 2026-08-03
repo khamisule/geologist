@@ -20,7 +20,8 @@
   html,body{height:100%;font-family:system-ui,Roboto,Segoe UI,sans-serif;background:#000;color:var(--dark)}
   #map{position:absolute;inset:0;z-index:1}
   /* Upau wa juu */
-  #bar{position:absolute;top:0;left:0;right:0;z-index:1000;background:linear-gradient(180deg,rgba(45,74,43,.97),rgba(45,74,43,.82));color:#fff;padding:8px 12px}
+  #bar{position:absolute;top:0;left:0;right:0;z-index:1000;background:linear-gradient(180deg,rgba(45,74,43,.97),rgba(45,74,43,.82));color:#fff;
+    padding:calc(8px + env(safe-area-inset-top,0px)) calc(12px + env(safe-area-inset-right,0px)) 8px calc(12px + env(safe-area-inset-left,0px))}
   #bar .top{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
   #bar .logo{font-weight:800;font-size:1.05rem}
   #bar .logo span{color:var(--gold)}
@@ -76,6 +77,7 @@
   #splash .st span{color:#ffd400}
   #splash .sb{font-size:1.02rem;opacity:.92}
   #bar .by{font-size:.62rem;opacity:.85;margin-left:2px;white-space:nowrap}
+  #bar .netpill{font-size:.62rem;padding:2px 8px;border-radius:11px;color:#fff;background:rgba(61,107,57,.92);white-space:nowrap;margin-left:6px}
 </style>
 </head>
 <body>
@@ -90,6 +92,7 @@
   <div class="top">
     <div class="logo"><svg viewBox="0 0 100 100" width="24" height="24" style="vertical-align:-5px;margin-right:5px"><polygon points="50,15 84,44 50,88 16,44" fill="#ffd400"/><polygon points="30,31 70,31 84,44 16,44" fill="#ffe678"/><g stroke="#2d4a2b" stroke-width="4" fill="none"><line x1="16" y1="44" x2="84" y2="44"/><line x1="50" y1="15" x2="30" y2="31"/><line x1="50" y1="15" x2="70" y2="31"/><line x1="16" y1="44" x2="50" y2="88"/><line x1="84" y1="44" x2="50" y2="88"/><line x1="30" y1="31" x2="50" y2="88"/><line x1="70" y1="31" x2="50" y2="88"/></g></svg>GEO<span>LOGIST</span></div>
     <span class="by">by Khamis Suleiman</span>
+    <span id="netPill" class="netpill"></span>
     <div class="modebtns">
       <button id="mView" class="on" onclick="setMode('view')">🗺️ Ona Madini</button>
       <button id="mGps" onclick="setMode('gps')">🚶 GPS &amp; Pima</button>
@@ -182,6 +185,22 @@ map.on('overlayadd', e=>{ if(e.layer===faultLayer) updateFaultsView(); });
 map.on('overlayremove', e=>{ if(e.layer===faultLayer){ faultLayer.clearLayers(); faultAutoHeat=null; setFaultHint(''); } });
 let mode='view', region='tanzania', clickToAdd=false, aoiPts=[], gpsAcc=[], lastRadar=null, lastFaults=null;
 
+// ---------- KUJILINDA (self-protection) + HALI YA MTANDAO (online/offline) ----------
+// Kosa lolote lisivunje app nzima; internet hutumika PALE TU inapohitajika.
+function isOnline(){ return navigator.onLine !== false; }
+function updateNetPill(){
+  const el=document.getElementById('netPill'); if(!el) return;
+  const on=isOnline();
+  el.textContent = on ? '🟢 Mtandaoni' : '⚪ Nje ya mtandao (kawaida)';
+  el.style.background = on ? 'rgba(61,107,57,.92)' : 'rgba(110,110,110,.92)';
+  el.title = on ? 'Internet inatumika kwa satelaiti/uchambuzi' : 'Vipimo vya GPS + hesabu vinaendelea; uchambuzi wa satelaiti utapatikana ukirudi mtandaoni';
+}
+window.addEventListener('online',  updateNetPill);
+window.addEventListener('offline', updateNetPill);
+// Kinga: makosa yasiyoshikwa yasivunje mfumo (yanaandikwa tu, app inaendelea)
+window.addEventListener('error', function(e){ try{ console.warn('Geologist: kosa limezuiwa —', e.message); }catch(_){ } });
+window.addEventListener('unhandledrejection', function(e){ try{ console.warn('Geologist: rejection imezuiwa —', e.reason); }catch(_){ } });
+
 function color(s){return s>=0.9?'#B3261E':s>=0.85?'#E4761B':'#3d6b39';}
 function hv(a1,o1,a2,o2){const R=6371,r=d=>d*Math.PI/180;const dA=r(a2-a1),dO=r(o2-o1);
   const x=Math.sin(dA/2)**2+Math.cos(r(a1))*Math.cos(r(a2))*Math.sin(dO/2)**2;return 2*R*Math.asin(Math.sqrt(x));}
@@ -190,6 +209,49 @@ function commoditiesAt(lat,lon){
   const within=rk.filter(x=>x.d<=x.b.r).map(x=>x.b);
   return {commod:[...new Set((within.length?within:[rk[0].b]).flatMap(b=>b.c))],
           within,nearest:rk.slice(0,3).map(x=>({...x.b,dist:x.d}))};
+}
+
+// ---------- MAHALI: eneo lipo mkoa/wilaya gani (reverse geocoding) ----------
+// Mikoa 31 ya Tanzania + centroids (kwa fallback ya OFFLINE — makadirio ya mkoa wa karibu)
+const TZ_REGIONS=[
+ ["Arusha",-3.6,36.7],["Dar es Salaam",-6.85,39.25],["Dodoma",-6.2,36.0],["Geita",-2.9,32.2],
+ ["Iringa",-8.0,35.6],["Kagera",-1.9,31.3],["Katavi",-6.4,31.2],["Kigoma",-4.9,30.2],
+ ["Kilimanjaro",-3.4,37.5],["Lindi",-9.8,38.6],["Manyara",-4.3,36.5],["Mara",-1.8,34.2],
+ ["Mbeya",-8.6,33.4],["Morogoro",-8.2,36.9],["Mtwara",-10.6,39.3],["Mwanza",-2.5,32.9],
+ ["Njombe",-9.3,34.8],["Pwani",-7.3,38.9],["Rukwa",-7.9,31.4],["Ruvuma",-10.7,36.0],
+ ["Shinyanga",-3.6,33.4],["Simiyu",-2.8,34.0],["Singida",-5.6,34.9],["Songwe",-8.7,32.9],
+ ["Tabora",-5.0,32.8],["Tanga",-5.3,38.3],["Kaskazini Unguja",-5.9,39.3],["Kusini Unguja",-6.3,39.4],
+ ["Mjini Magharibi",-6.16,39.2],["Kaskazini Pemba",-5.0,39.7],["Kusini Pemba",-5.3,39.75]
+];
+function nearestRegion(lat,lon){ let best=TZ_REGIONS[0],bd=1e9;
+  for(const r of TZ_REGIONS){ const d=hv(lat,lon,r[1],r[2]); if(d<bd){bd=d;best=r;} }
+  return {region:best[0], dist:bd}; }
+let lastLoc=null;
+// Reverse geocode HALISI (OpenStreetMap/Nominatim) -> mkoa/wilaya/mahali; offline -> mkoa wa karibu
+function reverseGeocode(lat,lon,cb){
+  if(!isOnline()){ const nr=nearestRegion(lat,lon); cb({region:nr.region,approx:true,online:false}); return; }  // offline: makadirio moja kwa moja
+  const url='https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=14&accept-language=sw&lat='+lat+'&lon='+lon;
+  const ctl=new AbortController(); const to=setTimeout(()=>ctl.abort(),8000);
+  fetch(url,{headers:{'Accept':'application/json'},signal:ctl.signal})
+    .then(r=>r.ok?r.json():Promise.reject()).then(d=>{ clearTimeout(to);
+      const a=d.address||{};
+      const region=a.state||a.region||a.county||'';
+      const district=a.state_district||a.county||a.municipality||a.city_district||a.district||'';
+      const place=a.suburb||a.ward||a.village||a.town||a.city||a.hamlet||a.neighbourhood||a.locality||'';
+      cb({region,district,place,display:d.display_name||'',country:a.country||'',online:true});
+    }).catch(()=>{ clearTimeout(to); const nr=nearestRegion(lat,lon); cb({region:nr.region,approx:true,online:false}); });
+}
+function locText(loc){
+  if(!loc) return '';
+  if(loc.approx) return '📍 <b>Mahali (makadirio, offline):</b> Mkoa wa '+loc.region+' — <span style="color:#888">jina kamili linahitaji internet</span>';
+  const parts=[loc.place, loc.district&&('Wilaya ya '+loc.district), loc.region&&('Mkoa wa '+loc.region)].filter(Boolean);
+  return '📍 <b>Mahali:</b> '+(parts.join(', ')||loc.display||'—')+(loc.country?(' · '+loc.country):'');
+}
+// Jaza sanduku la mahali (async) kwenye paneli
+function fillLocation(lat,lon){
+  const el=document.getElementById('locBox'); if(el) el.innerHTML='📍 Inatafuta mahali (mkoa/wilaya)…';
+  reverseGeocode(lat,lon,loc=>{ lastLoc={lat,lon,...loc};
+    const e=document.getElementById('locBox'); if(e) e.innerHTML=locText(loc); });
 }
 
 // ---------- MODE: ONA MADINI ----------
@@ -276,6 +338,19 @@ function ptsList(pts){
   return '<div style="max-height:96px;overflow:auto;font-family:ui-monospace,monospace;font-size:.7rem;margin-top:4px;background:#f4f4ef;border-radius:6px;padding:5px">'+
     pts.map((p,i)=>'P'+(i+1)+': '+p[0].toFixed(6)+', '+p[1].toFixed(6)).join('<br>')+'</div>'; }
 
+// Hifadhi PDF: kwenye Android (WebView) doc.save() HAIFANYI KAZI (haipakui blob),
+// hivyo tunatumia native bridge (AndroidBridge.savePdf -> huhifadhi Downloads).
+// Kwenye iPhone/kompyuta tunatumia doc.save() ya kawaida.
+function savePdfDoc(doc, filename, silent){
+  try{
+    if(window.AndroidBridge && typeof AndroidBridge.savePdf==='function'){
+      const b64=doc.output('datauristring').split(',')[1];
+      AndroidBridge.savePdf(filename, b64);
+    } else {
+      doc.save(filename);
+    }
+  }catch(e){ if(!silent) alert('Imeshindwa kuhifadhi PDF: '+(e&&e.message||e)); }
+}
 // Ripoti ya PDF ya eneo (client-side, jsPDF) — inatolewa na kupakuliwa/kusaviwa
 function buildAreaPdf(name, silent){
   if(aoiPts.length<3){ if(!silent) alert('Pima eneo kwanza (pembe 3+).'); return; }
@@ -289,7 +364,10 @@ function buildAreaPdf(name, silent){
   doc.setFontSize(11); doc.setTextColor(40,40,40);
   doc.text('Jina: '+nm, 14, y); y+=6;
   doc.text('Tarehe: '+new Date().toLocaleString(), 14, y); y+=6;
-  doc.text('Kituo (centroid): '+clat.toFixed(6)+', '+clon.toFixed(6), 14, y); y+=9;
+  doc.text('Kituo (centroid): '+clat.toFixed(6)+', '+clon.toFixed(6), 14, y); y+=6;
+  const _loc=(lastLoc&&Math.abs(lastLoc.lat-clat)<0.05&&Math.abs(lastLoc.lon-clon)<0.05)?lastLoc:{region:nearestRegion(clat,clon).region,approx:true};
+  const _mahali=_loc.approx?('Mkoa wa '+_loc.region+' (makadirio)'):[_loc.place,_loc.district&&('Wilaya ya '+_loc.district),_loc.region&&('Mkoa wa '+_loc.region)].filter(Boolean).join(', ');
+  doc.text('Mahali: '+(_mahali||'-'), 14, y, {maxWidth:182}); y+=9;
   doc.setFontSize(13); doc.setTextColor(61,107,57); doc.text('Ukubwa wa eneo', 14, y); y+=6;
   doc.setFontSize(11); doc.setTextColor(40,40,40);
   doc.text((r.area/10000).toFixed(4)+' hekta   |   '+Math.round(r.area).toLocaleString()+' m2', 14, y); y+=6;
@@ -307,13 +385,16 @@ function buildAreaPdf(name, silent){
   y+=5; if(y>265){doc.addPage(); y=16;}
   doc.setFontSize(8); doc.setTextColor(150,60,30);
   doc.text('Onyo: Viashiria vya kikanda - SI uthibitisho wa madini. Thibitisha kwa sampuli + maabara shambani. GPS ya simu ni +/- mita chache.', 14, y, {maxWidth:182});
-  doc.save((nm.replace(/[^a-zA-Z0-9_-]+/g,'_')||'eneo')+'_ripoti.pdf');
+  savePdfDoc(doc, (nm.replace(/[^a-zA-Z0-9_-]+/g,'_')||'eneo')+'_ripoti.pdf', silent);
 }
 function redrawAoi(){aoiLayer.clearLayers();
-  aoiPts.forEach((p,i)=>{L.marker(p).addTo(aoiLayer).bindTooltip('P'+(i+1),{permanent:true,direction:'top',className:'ptlabel'});
-    L.circleMarker(p,{radius:4,color:'#fff',fillColor:'#B3261E',fillOpacity:1,weight:1}).addTo(aoiLayer);});
-  if(aoiPts.length>=2) L.polyline(aoiPts,{color:'#ffd400',weight:2}).addTo(aoiLayer);
-  if(aoiPts.length>=3) L.polygon(aoiPts,{color:'#ffd400',weight:2,fillColor:'#ffd400',fillOpacity:.15}).addTo(aoiLayer);}
+  // circleMarker (HAITEGEMEI picha za marker) -> eneo huonekana kila mara, hata offline
+  aoiPts.forEach((p,i)=>{
+    L.circleMarker(p,{radius:6,color:'#fff',fillColor:'#B3261E',fillOpacity:1,weight:2}).addTo(aoiLayer)
+     .bindTooltip('P'+(i+1),{permanent:true,direction:'top',className:'ptlabel'});
+  });
+  if(aoiPts.length>=2) L.polyline(aoiPts,{color:'#ffd400',weight:3}).addTo(aoiLayer);
+  if(aoiPts.length>=3) L.polygon(aoiPts,{color:'#ffd400',weight:3,fillColor:'#ffd400',fillOpacity:.22}).addTo(aoiLayer);}
 function analyze(){
   if(aoiPts.length<3){ document.getElementById('panel').innerHTML='<h4>📐 Pima & Chunguza</h4><div style="color:#B3261E">Weka pembe 3+ (bonyeza ramani au andika coords).</div>'; return; }
   const r=areaPerim(aoiPts);
@@ -325,12 +406,14 @@ function analyze(){
     '<div style="font-size:.78rem">'+areaUnits(r.area)+'</div>'+
     '<div style="font-size:.8rem;margin-top:3px"><b>Vipimo:</b> '+fmtDims(aoiPts)+'</div>'+
     '<div style="font-size:.8rem;margin-top:2px">Mzunguko: '+(r.perim/1000).toFixed(3)+' km ('+Math.round(r.perim)+' m)</div>'+
-    '<div style="margin-top:6px;border-top:1px solid #eee;padding-top:5px"><b>⛏️ Madini:</b> '+g.commod.join(', ')+'</div>'+
+    '<div id="locBox" style="margin-top:6px;font-size:.8rem;background:#eef3ea;border-radius:8px;padding:6px 8px">📍 Inatafuta mahali (mkoa/wilaya)…</div>'+
+    '<div style="margin-top:6px;border-top:1px solid #eee;padding-top:5px"><b>⛏️ Madini yanayowezekana:</b> '+g.commod.join(', ')+'</div>'+
     '<div style="font-size:.78rem;color:#555;margin-top:2px">'+verdict+'</div>'+
     '<div style="font-size:.72rem;color:#555;margin-top:4px"><b>Points (lat, lon):</b></div>'+ptsList(aoiPts)+
     '<div class="pill" style="background:#1560d8;margin-top:8px;padding:5px 10px;cursor:pointer;display:inline-block" onclick="saveCurrent()">💾 Hifadhi eneo</div> '+
     '<div class="pill" style="background:#7a5c00;margin-top:8px;padding:5px 10px;cursor:pointer;display:inline-block" onclick="buildAreaPdf(\'Eneo\')">📄 Ripoti PDF</div>'+
     '<div style="font-size:.72rem;color:#B3261E;margin-top:5px">⚠️ Viashiria vya kikanda — thibitisha shambani.</div>';
+  fillLocation(clat,clon);
 }
 function clearAoi(){
   if(trackWatch!=null){ navigator.geolocation.clearWatch(trackWatch); trackWatch=null; } tracking=false;
@@ -458,8 +541,13 @@ async function saveCurrent(){
   if(name===null) return;
   const accs=gpsAcc.filter(x=>x);
   const acc = accs.length ? Math.round(accs.reduce((s,x)=>s+x,0)/accs.length) : null;
+  // Mahali: tumia lastLoc (kama limepatikana) au makadirio ya mkoa wa karibu
+  const loc = (lastLoc && Math.abs(lastLoc.lat-clat)<0.05 && Math.abs(lastLoc.lon-clon)<0.05) ? lastLoc : {region:nearestRegion(clat,clon).region, approx:true};
+  const regionName = loc.region||'';
+  const placeNote = [loc.place, loc.district&&('Wilaya ya '+loc.district)].filter(Boolean).join(', ');
   const body={ name:name||'Eneo', points:aoiPts.map(p=>[+p[0].toFixed(6),+p[1].toFixed(6)]),
-    method:(mode==='gps'?'gps':'manual'), commodities:g.commod, accuracy_m:acc };
+    method:(mode==='gps'?'gps':'manual'), commodities:g.commod, accuracy_m:acc,
+    region:regionName, note:placeNote };
   await apiTry();
   if(backendUp){
     try{
@@ -519,10 +607,12 @@ async function viewRec(id){
     '<div style="font-size:.76rem">'+areaUnits(rr.area)+'</div>'+
     '<div style="font-size:.78rem;margin-top:3px"><b>Vipimo:</b> '+fmtDims(aoiPts)+'</div>'+
     '<div style="font-size:.78rem">Mzunguko: '+(rr.perim/1000).toFixed(3)+' km</div>'+
+    '<div id="locBox" style="margin-top:5px;font-size:.8rem;background:#eef3ea;border-radius:8px;padding:6px 8px">📍 Inatafuta mahali (mkoa/wilaya)…</div>'+
     '<div style="font-size:.78rem;margin-top:4px"><b>Madini:</b> '+(r.commodities||[]).join(', ')+'</div>'+
     '<div style="font-size:.72rem;color:#555;margin-top:2px">'+new Date(r.date).toLocaleString()+' · points '+r.points.length+'</div>'+
     '<div style="font-size:.72rem;color:#555;margin-top:3px"><b>Points (lat, lon):</b></div>'+ptsList(aoiPts)+
     '<div class="pill" style="background:#7a5c00;margin-top:8px;padding:5px 10px;cursor:pointer;display:inline-block" onclick="buildAreaPdf('+JSON.stringify(r.name)+')">📄 Ripoti PDF</div>';
+  { const cla=aoiPts.reduce((s,p)=>s+p[0],0)/aoiPts.length, clo=aoiPts.reduce((s,p)=>s+p[1],0)/aoiPts.length; fillLocation(cla,clo); }
 }
 async function delRec(id,src){
   if(!confirm('Futa kumbukumbu hii?'))return;
@@ -576,62 +666,89 @@ function mineralRadar(){
     {enableHighAccuracy:true,timeout:MAXMS,maximumAge:0});
   setTimeout(()=>{ if(radarWatch!=null) finish(); }, MAXMS+800);
 }
+// Chambua PIXELS HALISI za picha ya satelaiti kwenye eneo lako -> iron-oxide (alteration) + mimea.
+// Fe-oxide/gossan huonekana nyekundu-kutu; hii ni proxy halisi ya remote-sensing (inatofautiana kila mahali).
+function satTileScan(lat,lon,cb){
+  const z=16, n=Math.pow(2,z), rad=lat*Math.PI/180;
+  const fx=(lon+180)/360*n, fy=(1-Math.log(Math.tan(rad)+1/Math.cos(rad))/Math.PI)/2*n;
+  const tx=Math.floor(fx), ty=Math.floor(fy), xf=(fx-tx)*256, yf=(fy-ty)*256;
+  const url='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/'+z+'/'+ty+'/'+tx;
+  const img=new Image(); img.crossOrigin='anonymous';
+  img.onload=function(){
+    const S=256, cv=document.createElement('canvas'); cv.width=S; cv.height=S;
+    const cx=cv.getContext('2d'); cx.drawImage(img,0,0,S,S);
+    let d; try{ d=cx.getImageData(0,0,S,S).data; }catch(e){ cb({err:'cors'}); return; }
+    const W=28, cxp=Math.round(xf), cyp=Math.round(yf);
+    let R=0,G=0,B=0,nP=0,ironCells=0;
+    for(let y=Math.max(0,cyp-W);y<=Math.min(S-1,cyp+W);y++)
+    for(let x=Math.max(0,cxp-W);x<=Math.min(S-1,cxp+W);x++){ const i=(y*S+x)*4;
+      const r=d[i],g=d[i+1],b=d[i+2]; R+=r;G+=g;B+=b;nP++;
+      if(r>b+20 && r>=g-5) ironCells++;                 // pixel yenye kutu (Fe-oxide)
+    }
+    if(!nP){ cb({err:'none'}); return; }
+    R/=nP;G/=nP;B/=nP;
+    const iron=Math.max(0,(R-B)/(R+B+1)), green=Math.max(0,(G-R)/(G+R+1));
+    cb({ iron:Math.min(1,iron*3.2), green:Math.min(1,green*3.2),
+         ironFrac:ironCells/nP, R:Math.round(R),G:Math.round(G),B:Math.round(B) });
+  };
+  img.onerror=function(){ cb({err:'net'}); };
+  img.src=url;
+}
 function radarAt(lat,lon,acc){
   radarLayer.clearLayers(); aoiLayer.clearLayers();
-  // duara la rada 1km + kituo (ulipo)
-  L.circle([lat,lon],{radius:RADAR_KM*1000,color:'#ffd400',weight:2,fillColor:'#ffd400',fillOpacity:.08}).addTo(radarLayer);
-  L.circleMarker([lat,lon],{radius:6,color:'#fff',fillColor:'#B3261E',fillOpacity:1,weight:2}).addTo(radarLayer)
-    .bindTooltip('📍 Uliposimama',{permanent:false});
-  map.setView([lat,lon], 14);
-  // 1) mineral belts halisi zinazokuathiri (uko ndani ya radius ya ukanda)
+  L.circle([lat,lon],{radius:RADAR_KM*1000,color:'#ffd400',weight:2,fillColor:'#ffd400',fillOpacity:.06}).addTo(radarLayer);
+  L.circleMarker([lat,lon],{radius:6,color:'#fff',fillColor:'#B3261E',fillOpacity:1,weight:2}).addTo(radarLayer).bindTooltip('📍 Uliposimama');
+  map.setView([lat,lon], 15);
+  // Muktadha wa kikanda (rejea ya jiolojia — SIYO matokeo ya eneo hili hasa)
   const rk=BELTS.map(b=>({b,d:hv(lat,lon,b.lat,b.lon)})).sort((x,y)=>x.d-y.d);
-  const within=rk.filter(x=>x.d<=x.b.r);
-  const nearest=rk[0];
-  // 2) prospectivity hotspots (Sentinel-2 halisi) ndani ya 1km
-  let hot=[];
-  for(const reg in HOTSPOTS){ HOTSPOTS[reg].forEach(p=>{ const d=hv(lat,lon,p[0],p[1]); if(d<=RADAR_KM) hot.push({lat:p[0],lon:p[1],sc:p[2],d}); }); }
-  hot.sort((a,b)=>b.sc-a.sc);
-  hot.slice(0,60).forEach(p=>{ L.circleMarker([p.lat,p.lon],{radius:5,color:'#fff',fillColor:color(p.sc),fillOpacity:.9,weight:1}).addTo(radarLayer)
-    .bindPopup('Uwezekano (satelaiti): <b>'+(p.sc*100).toFixed(0)+'%</b>'); });
-  const src = within.length ? within.map(x=>x.b) : [nearest.b];
-  const commod=[...new Set(src.flatMap(b=>b.c))];
-  const strong = hot.length>0 || within.length>0;
-  const maxSc = hot.length ? hot[0].sc : 0;
-  // BEEP: madini yamegunduliwa -> beep 3; hakuna -> beep moja hafifu
-  if(strong) beep(3,940); else beep(1,480);
-  // AUTO-RIPOTI (inaonekana moja kwa moja)
-  let h='<h4>📡 Rada ya madini — 1km</h4>';
-  h+='<div style="font-size:.74rem;color:#555">📍 '+lat.toFixed(6)+', '+lon.toFixed(6)+' (±'+Math.round(acc)+' m)</div>';
-  if(strong){
-    h+='<div style="margin-top:6px;background:#eafbea;border:1px solid #3d6b39;border-radius:8px;padding:7px">'+
-       '<div style="color:#3d6b39;font-weight:800">🔔 KUNA VIASHIRIA VYA MADINI</div>'+
-       '<div style="font-size:.84rem;margin-top:2px"><b>Madini yanayowezekana:</b> '+(commod.join(', ')||'-')+'</div>';
-    if(within.length) h+='<div style="font-size:.78rem;margin-top:2px">Uko NDANI ya ukanda: <b>'+within[0].b.name+'</b></div>';
-    if(hot.length) h+='<div style="font-size:.78rem">Alama za satelaiti ndani ya 1km: <b>'+hot.length+'</b> (juu zaidi '+(maxSc*100).toFixed(0)+'%)</div>';
-    h+='</div>';
-  } else {
-    h+='<div style="margin-top:6px;background:#fff4f0;border:1px solid #E4761B;border-radius:8px;padding:7px">'+
-       '<div style="color:#B3261E;font-weight:800">○ Hakuna kiashiria kikubwa ndani ya 1km</div>'+
-       '<div style="font-size:.8rem;margin-top:2px">Ukanda wa karibu: <b>'+nearest.b.name+'</b> (~'+nearest.d.toFixed(0)+' km)</div>'+
-       '<div style="font-size:.8rem">Madini ya kikanda: '+nearest.b.c.join(', ')+'</div></div>';
+  const within=rk.filter(x=>x.d<=x.b.r), nearest=rk[0];
+  const regionCommod=[...new Set((within.length?within.map(x=>x.b):[nearest.b]).flatMap(b=>b.c))];
+  document.getElementById('panel').innerHTML='<h4>📡 Rada ya madini</h4><div style="font-size:.82rem;color:var(--accent)">🛰️ Inachambua picha ya satelaiti + terrain YA ENEO HILI HASA… (internet)</div>';
+  let sat=null, flt=null, done=0;
+  function finish2(){
+    if(++done<2) return;
+    const ironN = sat&&!sat.err ? sat.iron : null;
+    const greenN = sat&&!sat.err ? sat.green : 0;
+    const faultDens = flt&&!flt.err ? flt.density : null;
+    const faultN = faultDens!=null ? Math.min(1, faultDens/0.12) : null;
+    // HESABU HALISI ya eneo hili (inatofautiana kila mahali kwa sababu iron & faults ni za hapo hasa)
+    let score=null;
+    if(ironN!=null || faultN!=null){
+      const wI=ironN!=null?0.5:0, wF=faultN!=null?0.5:0, ws=(wI+wF)||1;
+      score=Math.max(0,Math.min(1, (wI*(ironN||0)+wF*(faultN||0))/ws * (1-0.35*greenN) ));
+    }
+    if(flt&&!flt.err){ lastFaults={lat,lon,...flt}; if(map.hasLayer(faultLayer)) updateFaultsView(); }
+    const scorePct = score!=null?Math.round(score*100):null;
+    const lvl = score==null?'—':score>=0.6?'JUU':score>=0.35?'wastani':'chini';
+    if(score!=null && score>=0.45) beep(3,940); else beep(1,480);
+    let h='<h4>📡 Rada — uchambuzi wa eneo hili</h4>';
+    h+='<div style="font-size:.74rem;color:#555">📍 '+lat.toFixed(6)+', '+lon.toFixed(6)+' (±'+Math.round(acc)+' m)</div>';
+    if(score!=null){
+      const col=score>=0.6?'#3d6b39':score>=0.35?'#E4761B':'#B3261E';
+      h+='<div class="big" style="color:'+col+'">'+scorePct+'%</div>'+
+         '<div style="font-size:.8rem;margin-top:-4px">Uwezekano wa alteration/madini (umechambuliwa hapa) — <b>'+lvl+'</b></div>'+
+         '<div style="margin-top:6px;background:#f4f4ef;border-radius:8px;padding:7px;font-size:.8rem">'+
+         (ironN!=null?('🟥 Iron-oxide (kutu/alteration): <b>'+Math.round(ironN*100)+'%</b> — RGB('+sat.R+','+sat.G+','+sat.B+')<br>'):'🟥 Iron-oxide: (satelaiti haikupatikana)<br>')+
+         (faultN!=null?('🧭 Nyufa/faults: <b>'+Math.round(faultDens*100)+'%</b><br>'):'🧭 Nyufa: (DEM haikupatikana)<br>')+
+         '🌿 Mimea: <b>'+Math.round(greenN*100)+'%</b> (mimea mingi = mwamba umefunikwa)</div>';
+    } else {
+      const offMsg = isOnline()
+        ? 'Picha ya satelaiti haikupatikana sasa (mtandao dhaifu). Jaribu tena.'
+        : 'Huna internet sasa (ni kawaida). Ukiwa umewahi kufungua eneo hili, litatoka kwenye hifadhi; la sivyo, uchambuzi wa satelaiti utapatikana ukirudi mtandaoni. Vipimo vya GPS/eneo vinaendelea.';
+      h+='<div style="margin-top:6px;background:#f4f4ef;border:1px solid var(--rule,#cbb);border-radius:8px;padding:7px;font-size:.82rem;color:#444">'+offMsg+'</div>';
+    }
+    h+='<div style="margin-top:6px;font-size:.78rem"><b>Jiolojia ya kikanda (rejea):</b> '+regionCommod.join(', ')+'<br>'+
+       '<span style="color:#555">'+(within.length?('Ndani ya ukanda: '+within[0].b.name):('Karibu: '+nearest.b.name+' ~'+nearest.d.toFixed(0)+' km'))+'</span></div>';
+    h+='<div class="pill" style="background:#7a5c00;margin-top:8px;padding:5px 10px;cursor:pointer;display:inline-block" onclick="buildRadarPdf()">📄 Ripoti (PDF)</div>';
+    h+='<div style="font-size:.68rem;color:#B3261E;margin-top:6px">⚠️ Uchambuzi wa true-color + terrain = KIASHIRIA halisi cha eneo, si uthibitisho. Uchambuzi kamili = Sentinel-2 multispectral + sampuli/maabara.</div>';
+    document.getElementById('panel').innerHTML=h;
+    lastRadar={lat,lon,acc,report:{lat,lon,acc,scorePct,lvl,
+      iron: ironN!=null?Math.round(ironN*100):null, fault: faultN!=null?Math.round(faultDens*100):null,
+      green: Math.round(greenN*100), regionCommod,
+      region: within.length?within[0].b.name:nearest.b.name, regionDist: within.length?0:+nearest.d.toFixed(0)}};
   }
-  h+='<div class="pill" style="background:#7a5c00;margin-top:8px;padding:5px 10px;cursor:pointer;display:inline-block" onclick="buildRadarPdf()">📄 Ripoti ya rada (PDF)</div>';
-  h+='<div style="font-size:.7rem;color:#B3261E;margin-top:6px">⚠️ Viashiria vya kikanda + prospectivity ya satelaiti (Sentinel-2) — SI uthibitisho. Thibitisha kwa sampuli + maabara.</div>';
-  document.getElementById('panel').innerHTML=h;
-  lastRadar={lat,lon,acc,report:{lat,lon,acc,commod,strong,maxSc,hot:hot.length,faultPct:null,
-    within:within.map(x=>({name:x.b.name,d:x.d})), nearest:{name:nearest.b.name,d:nearest.d,c:nearest.b.c}}};
-  // Uchambuzi wa NYUFA (faults) kutoka DEM — dhahabu hupatikana kando ya faults
-  const pf=document.createElement('div'); pf.id='radarFault';
-  pf.style.cssText='font-size:.78rem;color:#555;margin-top:5px;border-top:1px dashed #ddd;padding-top:4px';
-  pf.innerHTML='🧭 Inachambua nyufa (faults) kutoka DEM…';
-  document.getElementById('panel').appendChild(pf);
-  faultScan(lat,lon,res=>{
-    const e=document.getElementById('radarFault'); if(!e) return;
-    if(res.err){ e.innerHTML='🧭 Nyufa (faults): inahitaji internet kupakua DEM.'; return; }
-    lastFaults={lat,lon,...res}; if(map.hasLayer(faultLayer)) updateFaultsView();
-    const pct=(res.density*100).toFixed(1); if(lastRadar&&lastRadar.report) lastRadar.report.faultPct=pct;
-    e.innerHTML='🧭 <b>Nyufa (faults): '+pct+'%</b> — '+(res.density>0.06?'dhahabu ya orogenic hupatikana <b>kando ya faults</b> (eneo la kuvutia).':'msongamano mdogo wa nyufa.');
-  });
+  satTileScan(lat,lon,r=>{ sat=r; finish2(); });
+  faultScan(lat,lon,r=>{ flt=r; finish2(); });
 }
 function buildRadarPdf(silent){
   if(!lastRadar||!lastRadar.report){ if(!silent) alert('Endesha rada kwanza.'); return; }
@@ -644,17 +761,19 @@ function buildRadarPdf(silent){
   doc.text('Eneo (GPS): '+R.lat.toFixed(6)+', '+R.lon.toFixed(6)+'  (+/- '+Math.round(R.acc)+' m)',14,y); y+=6;
   doc.text('Radius ya uchunguzi: 1.0 km (duara)',14,y); y+=9;
   doc.setFontSize(13); doc.setTextColor(61,107,57);
-  doc.text(R.strong?'MATOKEO: Kuna viashiria vya madini':'MATOKEO: Hakuna kiashiria kikubwa (ndani ya 1km)',14,y); y+=7;
+  doc.text('MATOKEO YA UCHAMBUZI (eneo hili hasa)',14,y); y+=7;
   doc.setFontSize(11); doc.setTextColor(40,40,40);
-  doc.text('Madini yanayowezekana: '+(R.commod.join(', ')||'-'),14,y,{maxWidth:182}); y+=6;
-  if(R.within.length){ doc.text('Uko ndani ya ukanda: '+R.within[0].name,14,y,{maxWidth:182}); y+=6; }
-  doc.text('Ukanda wa karibu: '+R.nearest.name+' (~'+R.nearest.d.toFixed(0)+' km)',14,y,{maxWidth:182}); y+=6;
-  doc.text('Alama za satelaiti (prospectivity) ndani ya 1km: '+R.hot+(R.hot?(' | juu zaidi '+(R.maxSc*100).toFixed(0)+'%'):''),14,y,{maxWidth:182}); y+=6;
-  if(R.faultPct!=null){ doc.text('Nyufa/miundo (faults, DEM lineaments): '+R.faultPct+'% (dhahabu hupatikana kando ya faults)',14,y,{maxWidth:182}); y+=6; }
-  y+=4;
+  doc.text('Uwezekano wa alteration/madini: '+(R.scorePct!=null?(R.scorePct+'%  ('+R.lvl+')'):'haikupatikana (internet?)'),14,y,{maxWidth:182}); y+=6;
+  if(R.iron!=null){ doc.text('Iron-oxide (kutu/alteration, satelaiti): '+R.iron+'%',14,y,{maxWidth:182}); y+=6; }
+  if(R.fault!=null){ doc.text('Nyufa/faults (DEM lineaments): '+R.fault+'% (dhahabu hupatikana kando ya faults)',14,y,{maxWidth:182}); y+=6; }
+  doc.text('Mimea (greenness): '+R.green+'%',14,y,{maxWidth:182}); y+=8;
+  doc.setFontSize(13); doc.setTextColor(61,107,57); doc.text('Jiolojia ya kikanda (rejea)',14,y); y+=6;
+  doc.setFontSize(11); doc.setTextColor(40,40,40);
+  doc.text('Madini ya kikanda: '+(R.regionCommod.join(', ')||'-'),14,y,{maxWidth:182}); y+=6;
+  doc.text('Ukanda: '+R.region+(R.regionDist?(' (~'+R.regionDist+' km)'):' (ndani)'),14,y,{maxWidth:182}); y+=8;
   doc.setFontSize(8); doc.setTextColor(150,60,30);
-  doc.text('Onyo: Viashiria vya kikanda + prospectivity ya satelaiti (Sentinel-2). SI uthibitisho wa madini. Thibitisha kwa sampuli na maabara. GPS ya simu ni +/- mita chache.',14,y,{maxWidth:182});
-  doc.save('rada_madini_'+Date.now()+'.pdf');
+  doc.text('Onyo: Iron-oxide ni proxy ya true-color + faults za DEM = KIASHIRIA halisi cha eneo, SI uthibitisho. Uchambuzi kamili = Sentinel-2 multispectral + sampuli/maabara. GPS ya simu ni +/- mita chache.',14,y,{maxWidth:182});
+  savePdfDoc(doc, 'rada_madini_'+Date.now()+'.pdf', silent);
 }
 
 // ---------- PIGA PICHA YA MWAMBA: kiashiria cha rangi (uchambuzi halisi wa canvas) ----------
@@ -786,7 +905,7 @@ function updateFaultsView(){
     if(++done===tiles.length){
       faultsBusy=false; faultLayer.clearLayers();
       if(all.length){ faultAutoHeat=L.heatLayer(all,{radius:8,blur:7,minOpacity:.35,gradient:{0.3:'#ff9d5c',0.6:'#B3261E',0.9:'#7a0000'}}); faultLayer.addLayer(faultAutoHeat); }
-      setFaultHint(all.length? '🧭 Nyufa/faults (nyekundu). Dhahabu hupatikana kando ya faults.' : (anyErr?'🧭 Nyufa: inahitaji internet (DEM).':'🧭 Hakuna nyufa dhahiri hapa.'));
+      setFaultHint(all.length? '🧭 Nyufa/faults (nyekundu). Dhahabu hupatikana kando ya faults.' : (anyErr?(isOnline()?'🧭 Nyufa: mtandao dhaifu — jaribu tena.':'🧭 Nyufa zitapatikana ukiwa mtandaoni (au eneo lililohifadhiwa).'):'🧭 Hakuna nyufa dhahiri hapa.'));
     }
   }));
 }
@@ -803,7 +922,8 @@ function runFaults(){
   document.getElementById('panel').innerHTML='<h4>🧭 Nyufa / Miundo (faults)</h4><div style="font-size:.82rem;color:var(--accent)">⛰️ Inapakua mwinuko (DEM) na kuchambua nyufa… (internet)</div>';
   updateFaultsView();
   faultScan(lat,lon,res=>{
-    if(res.err){ document.getElementById('panel').innerHTML='<h4>🧭 Nyufa</h4><div style="font-size:.82rem;color:#B3261E">❌ '+(res.err==='net'?'Imeshindwa kupata DEM — hakikisha una internet.':'Data ya DEM imezuiwa kwenye kifaa hiki (CORS).')+'</div><div style="font-size:.75rem;color:#555;margin-top:4px">Nyufa zinahitaji internet kupakua mwinuko (DEM).</div>'; return; }
+    if(res.err){ const m=res.err==='net'?(isOnline()?'Mtandao dhaifu — jaribu tena.':'Huna internet sasa (ni kawaida). Nyufa zitapatikana ukirudi mtandaoni, au kwa eneo lililohifadhiwa.'):'Data ya DEM imezuiwa kwenye kifaa hiki (CORS).';
+      document.getElementById('panel').innerHTML='<h4>🧭 Nyufa / Miundo (faults)</h4><div style="font-size:.82rem;color:#444;background:#f4f4ef;border-radius:8px;padding:7px">'+m+'</div>'; return; }
     lastFaults={lat,lon,...res};
     const pct=(res.density*100).toFixed(1), lvl=res.density>0.12?'JUU':res.density>0.06?'wastani':'chini';
     document.getElementById('panel').innerHTML='<h4>🧭 Nyufa / Miundo (faults)</h4>'+
@@ -871,6 +991,7 @@ window.__volCapture=function(){
 setTimeout(function(){ var s=document.getElementById('splash'); if(s){ s.classList.add('hide'); setTimeout(function(){ if(s&&s.parentNode) s.parentNode.removeChild(s); }, 700); } }, 1900);
 
 // anza
+updateNetPill();
 buildCtx(); renderView();
 setTimeout(function(){ if(map.hasLayer(faultLayer)) updateFaultsView(); }, 1200);  // nyufa zionekane zikifunguka
 
